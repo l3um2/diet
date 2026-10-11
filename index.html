@@ -25,7 +25,8 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 .top{position:sticky}
 .top>*{flex-shrink:0}
 .top h1{flex-shrink:1;text-align:center}
-@media (max-width:390px){.top h1{font-size:16px}#go-check{padding:6px 8px}#prev,#next{min-width:44px}#go-set{min-width:36px;padding:6px}}
+.top:has(#back)::after{content:'';width:50px;flex-shrink:0}
+@media (max-width:390px){.top h1{font-size:16px}#go-check{padding:6px 8px}#back,#prev,#next{min-width:44px}#go-set{min-width:36px;padding:6px}}
 .top h1{font-size:19px;font-weight:600;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .status{position:absolute;right:2px;bottom:-1px;font-size:11px;color:var(--mute);white-space:nowrap;pointer-events:none}
 button,.btn{font:inherit;font-size:15px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;cursor:pointer;min-height:38px}
@@ -129,7 +130,7 @@ svg text{font-family:var(--f-num)}
 .alarm .at{font-weight:500}
 .alarm .al{flex:1;min-width:0}
 .alarm.due button.primary{background:var(--surplus);border-color:var(--surplus)}
-#prev,#next{font-size:30px;line-height:1;min-width:50px;min-height:48px;padding:0 0 4px;border:1px solid var(--line);background:var(--panel);border-radius:12px}
+#back,#prev,#next{font-size:30px;line-height:1;min-width:50px;min-height:48px;padding:0 0 4px;border:1px solid var(--line);background:var(--panel);border-radius:12px}
 .gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
 .gal button{padding:0;border:0;aspect-ratio:1;position:relative;overflow:hidden;border-radius:6px;background:var(--chip);min-height:0;max-width:100%}
 .gal img{width:100%;height:100%;object-fit:cover;display:block}
@@ -224,7 +225,14 @@ function touchProf(fn,rerender){fn(S.prof);queueSave('profile',400);if(rerender)
 
 /* ---------- 화면 ---------- */
 function top(title,left,right){return '<div class="top">'+(left||'')+'<h1>'+title+'</h1><span class="status" id="status"></span>'+(right||'')+'</div>'}
-function render(){var y=window.scrollY;
+function render(){render0();syncHist()}
+var HL=0,expectPop=0;
+function navLevel(){if(!S.prof)return 0;var l=S.view==='today'?0:1;if(S.view==='setup')l=2;if(S.viewer!=null&&S.view==='check')l+=1;return l}
+function syncHist(){try{var L=navLevel();if(L>HL){for(var i=HL+1;i<=L;i++)history.pushState({gl:i},'');HL=L}else if(L<HL){expectPop++;history.go(L-HL);HL=L}}catch(e){}}
+window.addEventListener('popstate',function(e){var nl=(e.state&&e.state.gl)||0;if(expectPop>0){expectPop--;HL=nl;return}
+  HL=nl;if(S.viewer!=null&&S.view==='check'){S.viewer=null;document.body.style.overflow=''}else if(S.view==='setup'&&S.prof){S.view='settings';S.setErr=''}else if(S.view!=='today'){S.view='today';S.panel=S.panel}
+  S.keepScroll=false;render();window.scrollTo(0,0)});
+function render0(){var y=window.scrollY;
   if(!S.profLoaded){return}
   if(!S.mode){app.innerHTML=top('감량 일지')+'<div class="sec empty">이 브라우저에서는 기록을 저장할 공간을 열 수 없습니다. 크롬(안드로이드)이나 사파리에서 파일을 열어 주세요.</div>';return}
   if(!S.prof||S.view==='setup'){renderSetup();return}
