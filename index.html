@@ -425,7 +425,7 @@ function routine(date){var wk=dietWeek(date)||1,ph=phaseOf(wk),pat=DAYPAT[ph.day
   return {rest:false,ph:ph,wk:wk,pat:pat,cardio:ph.cardio,parts:ph.str?SPLIT[(idx+(wk-1)*ph.days)%SPLIT.length]:['복근'],sets:ph.sets}}
 function exExamples(part){var lc=S.prof.lifts||[];function n(e){var l=lc.find(function(x){return x.name===e.name});return l?l.count:0}
   return exLib().filter(function(e){return e.part===part}).map(function(e,i){return {e:e,i:i}}).sort(function(a,b){return n(b.e)-n(a.e)||a.i-b.i}).slice(0,2).map(function(x){return x.e})}
-function weekRate(){var all=weightSeries();if(all.length<5)return null;var last=all[all.length-1].d,from=addDays(last,-20),pts=all.filter(function(q){return q.d>=from});if(pts.length<5)return null;
+function weekRate(){var all=weightSeries();if(all.length<5)return null;var last=all[all.length-1].d,from=addDays(last,-20),pts=all.filter(function(q){return q.d>=from});if(pts.length<6||(parse(last)-parse(pts[0].d))/864e5<10)return null;
   var t0=parse(pts[0].d).getTime(),xs=pts.map(function(q){return (parse(q.d).getTime()-t0)/864e5}),ys=pts.map(function(q){return q.w}),n=xs.length,mx=xs.reduce(function(a,b){return a+b})/n,my=ys.reduce(function(a,b){return a+b})/n,nu=0,de=0;
   for(var i=0;i<n;i++){nu+=(xs[i]-mx)*(ys[i]-my);de+=(xs[i]-mx)*(xs[i]-mx)}return de?-nu/de*7:null}
 function coachCard(d,isToday){var p=S.prof;
@@ -442,7 +442,7 @@ function coachCard(d,isToday){var p=S.prof;
     h+='<div class="row">'+(doneC&&doneS?'<span style="color:var(--accent);font-weight:500;flex:1">✓ 오늘 추천 운동 완료</span>':'<button id="coachadd" style="flex:1">추천 근력 넣기</button><button id="coachex" style="flex:1">운동 기록</button>')+'</div>'}
   h+='</div>';
   var adv=[],wr=weekRate();
-  if(wr==null)adv.push('체중을 매일 아침 공복에 재면 2~3주 뒤부터 감량 속도를 분석해 드립니다.');
+  if(wr==null)adv.push('체중 기록이 10일 이상 쌓이면 감량 속도를 분석해 드립니다. 처음 1~2주는 수분이 함께 빠져 실제보다 빠르게 보입니다.');
   else if(wr<-0.1)adv.push('최근 3주 체중이 늘고 있습니다(주 +'+f1(-wr)+' kg). 간식·야식 기록과 점검 화면의 주간 칼로리를 확인해 보세요.');
   else if(wr/cur*100>1)adv.push('감량 속도가 빠릅니다(주 '+f1(wr)+' kg). 끼니마다 단백질을 챙기고 근력운동을 빠지지 마세요. 근육이 같이 빠지는 것을 막아 줍니다.');
   else if(wr<0.2)adv.push('최근 3주 거의 정체입니다(주 '+f1(wr)+' kg). 식단을 빠짐없이 기록하고 걷기를 하루 10분 늘려 보세요.');
