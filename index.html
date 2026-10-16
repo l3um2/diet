@@ -154,6 +154,11 @@ svg text{font-family:var(--f-num)}
 .acc.open .acch::after{transform:rotate(180deg)}
 .acc .acch:not(:has(.r))::after{margin-left:auto}
 .acc:not(.open){padding-block:14px}
+.medf{display:grid;gap:8px}
+label.ck{display:flex;align-items:center;gap:8px;font-size:15px;min-height:32px}
+label.ck input{width:20px;height:20px;min-height:0;accent-color:var(--accent)}
+.medf .sub label.ck{font-size:14px;color:var(--sub)}
+.tiles>.tile:last-child:nth-child(odd){grid-column:1/-1}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -182,11 +187,49 @@ function cofMl(d){return (d.coffee||[]).reduce(function(a,c){return a+cofMlOf(c)
 function waterTot(d){return (d.waterMl||0)+cofMl(d)}
 function exLib(){return (S.prof&&S.prof.exLib)||EXLIB0}
 function cofLib(){return (S.prof&&S.prof.cofLib)||COF0}
+var BSLOT=[['m','아침'],['l','점심'],['d','저녁']];
+var INJ={mounjaro:{name:'마운자로',doses:[2.5,5,7.5,10,12.5,15]},wegovy:{name:'위고비',doses:[0.25,0.5,1,1.7,2.4]}};
+var WD=['일','월','화','수','목','금','토'],SITES=['배 왼쪽','배 오른쪽','허벅지 왼쪽','허벅지 오른쪽','팔 왼쪽','팔 오른쪽'],SX=['메스꺼움','구토','설사','변비','속쓰림','복통','두통','피로'];
+function medCfg(){var p=S.prof||{};if(p.medSetup)return p.medSetup;if(p.mj)return {none:false,bor:{on:false,slots:[]},blue:false,inj:{type:'mounjaro',day:p.mj.day,dose:p.mj.dose}};return {none:false,bor:{on:true,slots:['l','d']},blue:true,inj:null}}
+function borSlots(){var c=medCfg();return c.bor&&c.bor.on?BSLOT.filter(function(s){return (c.bor.slots||[]).indexOf(s[0])>=0}):[]}
+function injCfg(){var c=medCfg();return c.inj&&INJ[c.inj.type]?c.inj:null}
+function injName(t){var i=t?{type:t}:injCfg();return i&&INJ[i.type]?INJ[i.type].name:'주사'}
+function anyMed(){return !!(borSlots().length||medCfg().blue||injCfg())}
+function medLabel(){var c=medCfg(),a=[];if(borSlots().length)a.push('보령 '+borSlots().length+'회');if(c.blue)a.push('파란약');if(injCfg())a.push(injName());return a.length?a.join(' · '):'없음'}
 function medT(m){return m?(typeof m==='object'?m.t:m):null}
 function medNo(m){return m&&typeof m==='object'?m.no:null}
-function lastMedBefore(date,slot){var b=S.prof&&S.prof.medBase;if(!b)return null;var mx=b.no;
-  Object.keys(S.days).forEach(function(k){if(k<b.date||k>date)return;var md=S.days[k].meds||{};var sl=k===date?(slot==='d'?['l']:[]):['l','d'];sl.forEach(function(x){var n=medNo(md[x]);if(n!=null&&n>mx)mx=n})});return mx}
-function medShow(d,slot){var m=d.meds[slot];if(medNo(m)!=null)return medNo(m);var last=lastMedBefore(d.date,slot);if(last==null)return null;if(slot==='l')return last+1;return last+(medNo(d.meds.l)!=null?1:2)}
+function medPlan(d){var b=S.prof&&S.prof.medBase,out={};if(!b)return out;var mx=b.no;
+  Object.keys(S.days).forEach(function(k){if(k<b.date||k>=d.date)return;var md=S.days[k].meds||{};['m','l','d'].forEach(function(x){var n=medNo(md[x]);if(n!=null&&n>mx)mx=n})});
+  var cur=mx;borSlots().forEach(function(sl){var n=medNo((d.meds||{})[sl[0]]);if(n!=null){cur=n;out[sl[0]]=n}else{cur+=1;out[sl[0]]=cur}});return out}
+function medShow(d,slot){var n=medNo((d.meds||{})[slot]);if(n!=null)return n;var pl=medPlan(d);return pl[slot]!=null?pl[slot]:null}
+function lastInj(before){var ks=Object.keys(S.days).filter(function(k){return k<before&&S.days[k].inj}).sort();return ks.length?ks[ks.length-1]:null}
+function nextDue(date){var c=injCfg();var li=lastInj(date);if(li)return addDays(li,7);var diff=((c?c.day:0)-parse(date).getDay()+7)%7;return addDays(date,diff)}
+function mjDue(d){return !!injCfg()&&!d.inj&&nextDue(d.date)<=d.date}
+function nextSite(date){var li=lastInj(date);if(!li)return SITES[0];var i=SITES.indexOf(S.days[li].inj.site);return SITES[(i+1)%SITES.length]}
+function injShort(d){if(d.inj)return esc(d.inj.t);var n=Math.round((parse(nextDue(d.date))-parse(d.date))/864e5);return n<0?'<span class="pos">'+(-n)+'일↑</span>':n===0?'<span class="pos">오늘</span>':'D-'+n}
+function medSummary(d){var c=medCfg(),a=[];d.meds=d.meds||{};borSlots().forEach(function(sl){var m=d.meds[sl[0]];a.push(sl[1]+' '+(m?'✓'+(medNo(m)!=null?' '+medNo(m)+'번':'')+' '+medT(m):'✗'))});
+  ['m','l','d'].forEach(function(x){if(d.meds[x]&&!borSlots().some(function(sl){return sl[0]===x}))a.push(BSLOT.find(function(b){return b[0]===x})[1]+' ✓ '+(medNo(d.meds[x])!=null?medNo(d.meds[x])+'번 ':'')+medT(d.meds[x]))});
+  if(c.blue||d.meds.b)a.push('파란약 '+(d.meds.b?'✓ '+medT(d.meds.b):'✗'));
+  if(d.inj)a.push(injName(d.inj.type||(c.inj&&c.inj.type)||'mounjaro')+' ✓ '+d.inj.dose+'mg · '+d.inj.site);
+  if(d.fx&&d.fx.ap)a.push('식욕 '+['낮음','보통','높음'][d.fx.ap-1]);if(d.fx&&d.fx.sx&&d.fx.sx.length)a.push(d.fx.sx.join(', '));return a.join(' · ')}
+function medForm(px,c){c=c||medCfg();var bs=(c.bor&&c.bor.on)?(c.bor.slots||[]):[],it=c.inj&&INJ[c.inj.type]?c.inj:null;
+  var cb=function(id,on,lbl,extra){return '<label class="ck"><input type="checkbox" id="'+px+id+'"'+(on?' checked':'')+(extra||'')+'> '+lbl+'</label>'};
+  var h='<div class="medf">'+cb('-none',c.none,'복용 약 없음')+
+  cb('-bor',c.bor&&c.bor.on,'보령 (봉지 번호 1번부터 순서대로)')+'<div class="row sub" style="gap:6px;padding-left:26px">'+BSLOT.map(function(sl){return cb('-b'+sl[0],bs.indexOf(sl[0])>=0,sl[1]+' 전')}).join('')+'</div>'+
+  cb('-blue',c.blue,'파란약 (하루 1회)')+
+  '<div class="grid2"><label class="f">주 1회 주사<select id="'+px+'-inj"><option value="">없음</option>'+Object.keys(INJ).map(function(k){return '<option value="'+k+'"'+(it&&it.type===k?' selected':'')+'>'+INJ[k].name+'</option>'}).join('')+'</select></label>'+
+  '<label class="f">주사 요일<select id="'+px+'-iday">'+WD.map(function(x,i){return '<option value="'+i+'"'+(it&&it.day===i?' selected':'')+'>'+x+'요일</option>'}).join('')+'</select></label>'+
+  '<label class="f">현재 용량<select id="'+px+'-idose">'+doseOpts(it?it.type:'mounjaro',it?it.dose:null)+'</select></label></div></div>';return h}
+function doseOpts(t,cur){var ds=INJ[t]?INJ[t].doses:INJ.mounjaro.doses;return ds.map(function(x){return '<option value="'+x+'"'+(x==cur?' selected':'')+'>'+x+' mg</option>'}).join('')}
+function readMedForm(px){var g=function(id){return document.getElementById(px+id)};var none=g('-none').checked;var slots=BSLOT.map(function(sl){return sl[0]}).filter(function(k){return g('-b'+k).checked});var t=g('-inj').value;
+  if(none)return {none:true,bor:{on:false,slots:slots},blue:false,inj:null};
+  return {none:false,bor:{on:g('-bor').checked&&slots.length>0,slots:slots},blue:g('-blue').checked,inj:t?{type:t,day:+g('-iday').value,dose:+g('-idose').value}:null}}
+function wireMedForm(px,onChange){var g=function(id){return document.getElementById(px+id)};if(!g('-none'))return;
+  var sync=function(){var t=g('-inj').value;g('-iday').disabled=g('-idose').disabled=!t;['m','l','d'].forEach(function(k){g('-b'+k).disabled=!g('-bor').checked})};
+  g('-none').addEventListener('change',function(){if(g('-none').checked){g('-bor').checked=false;g('-blue').checked=false;g('-inj').value=''}sync();onChange&&onChange()});
+  ['-bor','-blue','-bm','-bl','-bd'].forEach(function(id){g(id).addEventListener('change',function(){if(g(id).checked)g('-none').checked=false;if(id.length===3&&g(id).checked)g('-bor').checked=true;if(id==='-bor'&&g('-bor').checked&&!['m','l','d'].some(function(k){return g('-b'+k).checked})){g('-bl').checked=true;g('-bd').checked=true}sync();onChange&&onChange()})});
+  g('-inj').addEventListener('change',function(){var t=g('-inj').value;if(t){g('-none').checked=false;g('-idose').innerHTML=doseOpts(t,null)}sync();onChange&&onChange()});
+  ['-iday','-idose'].forEach(function(id){g(id).addEventListener('change',function(){onChange&&onChange()})});sync()}
 function findEx(n){return exLib().find(function(e){return e.name===n})}
 var ACT=[[1.2,'좌식 위주 (사무직, 운동 별도 입력)'],[1.3,'조금 움직임 (서서 일함·이동 많음)'],[1.4,'많이 움직임 (현장 근무)']];
 var S={db:null,assets:null,dl:null,uid:null,prof:null,profLoaded:false,days:{},view:'today',date:today(),openMeal:null,calY:0,calM:0,sel:null,range:30,setErr:'',dirty:{},photoBusy:false};
@@ -206,7 +249,7 @@ function clone(o){return JSON.parse(JSON.stringify(o))}
 
 function blankDay(date){return {date:date,weight:null,meals:{b:[],l:[],d:[],s:[]},waterMl:0,meds:{l:null,d:null,b:null},cardio:[],strength:[],coffee:[],photos:[],memo:''}}
 function getDay(date){if(!S.days[date])S.days[date]=blankDay(date);var d=S.days[date];d.meals=d.meals||{b:[],l:[],d:[]};MEALS.forEach(function(m){d.meals[m[0]]=d.meals[m[0]]||[]});d.meds=d.meds||{l:null,d:null};d.cardio=d.cardio||[];d.strength=d.strength||[];d.coffee=d.coffee||[];d.photos=d.photos||[];return d}
-function hasData(d){return d&&(d.weight||d.waterMl||(d.cardio&&d.cardio.length)||(d.strength&&d.strength.length)||(d.photos&&d.photos.length)||(d.coffee&&d.coffee.length)||d.memo||(d.meds&&(d.meds.l||d.meds.d||d.meds.b))||mealCount(d))}
+function hasData(d){return d&&(d.weight||d.waterMl||(d.cardio&&d.cardio.length)||(d.strength&&d.strength.length)||(d.photos&&d.photos.length)||(d.coffee&&d.coffee.length)||d.memo||(d.meds&&(d.meds.m||d.meds.l||d.meds.d||d.meds.b))||d.inj||(d.fx&&(d.fx.ap||(d.fx.sx&&d.fx.sx.length)))||mealCount(d))}
 function mealCount(d){if(!d||!d.meals)return 0;return MEALS.reduce(function(a,m){return a+(d.meals[m[0]]||[]).length},0)}
 
 /* ---------- 칼로리 계산 ---------- */
@@ -274,25 +317,39 @@ function readInbody(){function n(id){var v=parseFloat(document.getElementById(id
 
 function renderSetup(){var edit=!!S.prof;var p=S.prof||{};
   app.innerHTML=top(edit?'인바디 기록 추가':'처음 설정',edit?'<button class="icon ghost" id="back" aria-label="뒤로">‹</button>':'')+
-  '<div class="sec"><h2>인바디 결과지</h2>'+inbodyFields()+'</div>'+
-  (edit?'':'<div class="sec"><h2>목표와 생활</h2><div class="grid2">'+
-  '<label class="f">키 (cm)<input id="s-height" type="number" inputmode="decimal" step="0.1" placeholder="175.0"></label>'+
+  (edit?'':'<div class="sec"><h2>기본 정보</h2><div class="grid2"><label class="f">성별<select id="s-sex"><option value="m">남성</option><option value="f">여성</option></select></label><label class="f">나이<input id="s-age" type="number" inputmode="numeric" placeholder="38"></label><label class="f">키 (cm)<input id="s-height" type="number" inputmode="decimal" step="0.1" placeholder="175.0"></label></div>'+
+  '<div class="row" role="radiogroup" style="margin-top:4px"><button class="chip on" id="mode-ib" style="flex:1;justify-content:center;min-height:40px">인바디 결과 입력</button><button class="chip" id="mode-ap" style="flex:1;justify-content:center;min-height:40px">인바디 없음 (근사치)</button></div></div>')+
+  '<div class="sec" id="ib-sec"><h2>인바디 결과지</h2>'+inbodyFields()+'</div>'+
+  (edit?'':'<div class="sec" id="ap-sec" hidden><h2>근사치 계산</h2><label class="f">현재 체중 (kg) *<input id="ap-w" type="number" inputmode="decimal" step="0.1" placeholder="93.0"></label><p class="hint" id="ap-prev" style="margin:0">성별·나이·키·체중으로 기초대사량(Mifflin-St Jeor 공식)과 체지방률(BMI 기반 추정식)을 계산합니다. 실제와 ±10% 정도 차이가 날 수 있으니, 나중에 인바디를 재면 설정에서 추가하세요.</p></div>'+
+  '<div class="sec"><h2>복용 약</h2>'+medForm('su',{none:true,bor:{on:false,slots:['l','d']},blue:false,inj:null})+'<label class="f" id="su-basew">보령: 어제 마지막으로 먹은 봉지 번호 (처음이면 0)<input id="su-base" type="number" inputmode="numeric" placeholder="0"></label></div>'+
+  '<div class="sec"><h2>목표와 생활</h2><div class="grid2">'+
   '<label class="f">현재 다이어트 주차<input id="s-week" type="number" inputmode="numeric" min="1" value="1"></label>'+
   '<label class="f">다이어트 시작 체중 (kg)<input id="s-sw" type="number" inputmode="decimal" step="0.1" placeholder="비우면 오늘 체중"></label>'+
   '<label class="f">목표 체중 (kg)<input id="s-goal" type="number" inputmode="decimal" step="0.1" placeholder="72.0"></label>'+
   '<label class="f">하루 물 목표 (ml)<input id="s-water" type="number" inputmode="numeric" step="100" value="2000"></label></div>'+
   '<label class="f">평소 활동 수준<select id="s-act">'+ACT.map(function(a){return '<option value="'+a[0]+'">'+a[1]+'</option>'}).join('')+'</select></label>'+
   '<p class="hint">하루 소모량 = 기초대사량 × 활동 수준 + 입력한 운동. 운동은 따로 더하므로 운동량은 빼고 골라 주세요.</p></div>')+
-  (S.setErr?'<p class="err">'+esc(S.setErr)+'</p>':'')+
+  '<p class="err" id="setup-err">'+esc(S.setErr||'')+'</p>'+
   '<button class="primary" id="setup-save" style="width:100%">'+(edit?'인바디 기록 저장':'시작하기')+'</button>'+
   (edit?'':'<div class="sec" style="margin-top:12px"><h2>이미 쓰던 기록이 있다면</h2><p class="hint" style="margin:0">감량 일지 백업 파일(.json)을 고르면 기록과 사진을 그대로 되살립니다.</p><label class="btn" style="display:inline-flex;justify-content:center;align-items:center">'+(S.busy==='rs'?'복원 중…':'백업에서 복원')+'<input id="rs0" type="file" accept=".json,application/json" hidden></label></div>');
   bind('back','click',function(){S.view='settings';S.setErr='';render()});
+  var mode=S.setupMode||'ib';function setMode(m){mode=S.setupMode=m;var a=document.getElementById('ib-sec'),b=document.getElementById('ap-sec');if(!b)return;a.hidden=m!=='ib';b.hidden=m!=='ap';document.getElementById('mode-ib').classList.toggle('on',m==='ib');document.getElementById('mode-ap').classList.toggle('on',m==='ap');apPrev()}
+  function apVals(){var g=function(id){var e=document.getElementById(id);return e?parseFloat(e.value):NaN};return {w:g('ap-w'),h:g('s-height'),a:g('s-age'),sex:(document.getElementById('s-sex')||{}).value}}
+  function apCalc(v){if(!(v.w>25&&v.h>100&&v.a>10))return null;var bmr=Math.round(10*v.w+6.25*v.h-5*v.a+(v.sex==='f'?-161:5));var bmi=v.w/((v.h/100)*(v.h/100));var fp=Math.round((1.2*bmi+0.23*v.a-10.8*(v.sex==='f'?0:1)-5.4)*10)/10;fp=Math.max(5,Math.min(60,fp));return {bmr:bmr,fatPct:fp,fatKg:Math.round(v.w*fp)/100}}
+  function apPrev(){var e=document.getElementById('ap-prev');if(!e||mode!=='ap')return;var r=apCalc(apVals());e.textContent=r?'추정 기초대사량 '+r.bmr+' kcal · 체지방률 약 '+r.fatPct+'% (체지방 '+r.fatKg+' kg). 실제와 ±10% 차이가 날 수 있습니다.':'성별·나이·키·현재 체중을 입력하면 기초대사량과 체지방률을 추정합니다.'}
+  bind('mode-ib','click',function(){setMode('ib')});bind('mode-ap','click',function(){setMode('ap')});
+  ['ap-w','s-height','s-age','s-sex'].forEach(function(id){bind(id,'input',apPrev);bind(id,'change',apPrev)});
+  wireMedForm('su',function(){var bw=document.getElementById('su-basew');if(bw)bw.hidden=!document.getElementById('su-bor').checked});var bw0=document.getElementById('su-basew');if(bw0)bw0.hidden=true;
+  if(!edit)setMode(mode);
   bind('rs0','change',function(e){var f=e.target.files&&e.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d.app!=='gamryang'||!d.profile)throw 0;S.restore={name:f.name,data:d};S.setErr='';restore()}catch(x){S.setErr='감량 일지 백업 파일이 아닙니다.';render()}};r.readAsText(f)});
-  bind('setup-save','click',function(){var r=readInbody();if(r.err){S.setErr=r.err;render();return}S.setErr='';
+  bind('setup-save','click',function(){var r;var errEl=function(m){S.setErr=m;var e=document.getElementById('setup-err');if(e)e.textContent=m;else render()};
+    if(!edit&&mode==='ap'){var v=apVals(),c=apCalc(v);if(!c){errEl('근사치 계산에는 성별, 나이, 키, 현재 체중이 모두 필요합니다.');return}r={v:{date:today(),weight:Math.round(v.w*10)/10,smm:null,fatKg:c.fatKg,fatPct:c.fatPct,bmr:c.bmr,bmrEst:true,est:true}}}
+    else{r=readInbody();if(r.err){errEl(r.err);return}}S.setErr='';
     if(edit){S.prof.inbody=(S.prof.inbody||[]).filter(function(x){return x.date!==r.v.date}).concat([r.v]);queueSave('profile',0);S.view='settings';render();return}
     var g=parseFloat(document.getElementById('s-goal').value);
     var ht=parseFloat(document.getElementById('s-height').value),wk=Math.max(1,parseInt(document.getElementById('s-week').value,10)||1),sw=parseFloat(document.getElementById('s-sw').value);
-    S.prof={inbody:[r.v],height:ht>100&&ht<230?ht:null,dietStart:addDays(today(),-(wk-1)*7),startWeight:sw>25&&sw<300?sw:r.v.weight,goal:isNaN(g)?null:g,waterGoal:parseInt(document.getElementById('s-water').value,10)||2000,activity:parseFloat(document.getElementById('s-act').value)||1.2,menus:[],lifts:[]};
+    S.prof={inbody:[r.v],height:ht>100&&ht<230?ht:null,dietStart:addDays(today(),-(wk-1)*7),startWeight:sw>25&&sw<300?sw:r.v.weight,goal:isNaN(g)?null:g,waterGoal:parseInt(document.getElementById('s-water').value,10)||2000,activity:parseFloat(document.getElementById('s-act').value)||1.2,menus:[],lifts:[],sex:document.getElementById('s-sex').value,age:parseInt(document.getElementById('s-age').value,10)||null,medSetup:readMedForm('su')};
+    var sb=parseInt(document.getElementById('su-base').value,10);if(S.prof.medSetup.bor.on)S.prof.medBase={date:today(),no:isNaN(sb)?0:sb};
     var d=getDay(r.v.date);if(!d.weight){d.weight=r.v.weight;queueSave(r.v.date,0)}
     queueSave('profile',0);S.view='today';render()})}
 
@@ -311,16 +368,18 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   h+=coachCard(d,isToday);
   /* 주요 4칸 */
   var mealK=MEALS.reduce(function(t,m){return t+d.meals[m[0]].reduce(function(u,x){return u+(+x.kcal||0)},0)},0);
-  var mL=d.meds.l,mD=d.meds.d,noL=medShow(d,'l'),noD=medShow(d,'d');
-  var mB=d.meds.b;var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no!=null?no+'번':'–')+'</span></span>'};
-  var medGrid='<span class="mgrid">'+medCell('점심',mL,p.medBase?noL:null)+medCell('저녁',mD,p.medBase?noD:null)+medCell('파란약',mB,null)+'</span>';
+  var mplan=medPlan(d),mcells=[];borSlots().forEach(function(sl){mcells.push([sl[1],d.meds[sl[0]],p.medBase?mplan[sl[0]]:null])});if(medCfg().blue)mcells.push(['파란약',d.meds.b,null]);
+  var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no!=null?no+'번':'–')+'</span></span>'};
+  var ic=injCfg(),ncell=mcells.length+(ic?1:0);
+  var medGrid='<span class="mgrid" style="grid-template-columns:repeat('+Math.max(1,Math.min(3,ncell))+',minmax(0,1fr))">'+mcells.map(function(c){return medCell(c[0],c[1],c[2])}).join('')+(ic?'<span class="mc'+(d.inj?' on':'')+'"><span class="ml">'+injName()+'</span><span class="mt num">'+injShort(d)+'</span></span>':'')+'</span>';
+  var medDone=mcells.every(function(c){return medT(c[1])})&&(!ic||!mjDue(d));
   var wg=p.waterGoal||2000;var pct=Math.min(100,waterTot(d)/wg*100);var ex=exKcal(d);
   var tiles=[
     ['meal','식단',r0(mealK).toLocaleString('ko-KR')+'<small>kcal</small>','<span style="color:'+(protOf(d)>=protGoal()?'var(--accent)':'inherit')+'">단백질 '+r0(protOf(d))+'/'+protGoal()+'g</span><br>'+MEALS.map(function(m){return m[1].slice(0,1)+(d.meals[m[0]].length?'✓':'–')}).join(' '),mealCount(d)>0],
-    ['med','약 복용','',medGrid,medT(mL)&&medT(mD)&&medT(mB)],
+    (anyMed()?['med','약 복용','',medGrid,medDone]:null),
     ['water','물',waterTot(d).toLocaleString('ko-KR')+'<small>ml</small>','<span class="bar" style="display:block;margin-top:4px"><i style="width:'+pct+'%"></i></span>',waterTot(d)>=wg],
     ['ex','운동',(exMin(d)||exSets(d)?(exMin(d)?exMin(d)+'<small>분</small> ':'')+(exSets(d)?exSets(d)+'<small>세트</small>':''):'–'),(p.timer?'<span style="color:var(--deficit)">'+esc(p.timer.type)+' 측정 중</span>':r0(ex)+' kcal'),(d.cardio.length+d.strength.length)>0]];
-  h+='<div class="tiles">'+tiles.map(function(t){return '<button class="tile'+(S.panel===t[0]?' open':'')+(t[4]?' done':'')+'" data-panel="'+t[0]+'" aria-expanded="'+(S.panel===t[0])+'"><span class="tl">'+t[1]+'</span>'+(t[0]==='med'?t[3]:'<span class="tv num">'+t[2]+'</span><span class="ts">'+t[3]+'</span>')+'</button>'}).join('')+'</div>';
+  h+='<div class="tiles">'+tiles.filter(Boolean).map(function(t){return '<button class="tile'+(S.panel===t[0]?' open':'')+(t[4]?' done':'')+'" data-panel="'+t[0]+'" aria-expanded="'+(S.panel===t[0])+'"><span class="tl">'+t[1]+'</span>'+(t[0]==='med'?t[3]:'<span class="tv num">'+t[2]+'</span><span class="ts">'+t[3]+'</span>')+'</button>'}).join('')+'</div>';
   if(['meal','med','water','ex'].indexOf(S.panel)>=0)h+=panel(d,S.panel);
   /* 하단 버튼 */
   var caf=caffeine(d);
@@ -355,6 +414,10 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   bind('mp','keydown',function(e){if(e.key==='Enter')document.getElementById('madd').click()});
   bind('madd','click',function(){var n=document.getElementById('mn').value.trim(),k=parseFloat(document.getElementById('mk').value);if(!n){document.getElementById('merr').textContent='메뉴 이름을 입력해 주세요.';return}if(isNaN(k)||k<0){document.getElementById('merr').textContent='칼로리를 숫자로 입력해 주세요. 모르면 대략적인 값도 괜찮습니다.';return}var pr=parseFloat(document.getElementById('mp').value);addMeal(n,k,isNaN(pr)?null:pr)});
   all('[data-med]',function(b){b.onclick=function(){var k=b.dataset.med;S.keepScroll=true;touchDay(function(d){var n=new Date();if(d.meds[k]){d.meds[k]=null;return}d.meds[k]=k==='b'?{t:pad(n.getHours())+':'+pad(n.getMinutes())}:{t:pad(n.getHours())+':'+pad(n.getMinutes()),no:medShow(d,k)}})}});
+  bind('injdo','click',function(){var c=injCfg();if(!c)return;var dose=+document.getElementById('injdose').value,site=document.getElementById('injsite').value,n=nowHM();S.keepScroll=true;if(dose!==c.dose)touchProf(function(p){var ms=p.medSetup||medCfg();ms.inj.dose=dose;p.medSetup=ms});touchDay(function(d){d.inj={t:n,dose:dose,site:site,type:c.type}})});
+  bind('injundo','click',function(){S.keepScroll=true;if(S.injUndo){S.injUndo=false;touchDay(function(d){delete d.inj})}else{S.injUndo=true;render()}});
+  all('[data-ap]',function(b){b.onclick=function(){var v=+b.dataset.ap;S.keepScroll=true;touchDay(function(d){d.fx=d.fx||{};d.fx.ap=d.fx.ap===v?null:v})}});
+  all('[data-sx]',function(b){b.onclick=function(){var x=b.dataset.sx;S.keepScroll=true;touchDay(function(d){d.fx=d.fx||{};d.fx.sx=d.fx.sx||[];var k=d.fx.sx.indexOf(x);if(k>=0)d.fx.sx.splice(k,1);else d.fx.sx.push(x)})}});
   bind('mbsave','click',function(){var v=parseInt(document.getElementById('mb').value,10);if(isNaN(v)||v<0){document.getElementById('mberr').textContent='번호를 숫자로 입력해 주세요.';return}S.keepScroll=true;touchProf(function(p){p.medBase={date:S.date,no:v}},true)});
   all('[data-water]',function(b){b.onclick=function(){S.keepScroll=true;touchDay(function(d){d.waterMl=Math.max(0,d.waterMl+(+b.dataset.water))})}});
   bind('wadd','click',function(){var v=parseInt(document.getElementById('wml').value,10);if(isNaN(v)||v<=0)return;S.keepScroll=true;touchDay(function(d){d.waterMl+=v})});
@@ -383,10 +446,19 @@ function panel(d,k){var p=S.prof,h='<div class="sec panel">';
         '<input id="mn" placeholder="메뉴 이름 (예: 닭가슴살 샐러드)" list="menu-list"><div class="ex-row" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"><input id="mk" type="number" inputmode="numeric" placeholder="kcal"><input id="mp" type="number" inputmode="decimal" step="0.1" placeholder="단백질 g"><button class="primary" id="madd">추가</button></div>'+
         '<datalist id="menu-list">'+(p.menus||[]).map(function(f){return '<option value="'+esc(f.name)+'">'}).join('')+'</datalist><p class="err" id="merr"></p></div>'}
       h+='</div>'})}
-  else if(k==='med'){h+='<h2>약 복용<span class="r">'+(p.medBase?'봉지 번호 순서대로':'')+'</span></h2>';
-    if(!p.medBase)h+='<p class="hint" style="margin:0;color:var(--sub)">어제 마지막으로 먹은 약 봉지 번호를 입력하면 오늘 먹을 번호를 알려 드립니다. 오늘 처음 시작하면 0을 입력하세요.</p><div class="row"><input id="mb" type="number" inputmode="numeric" placeholder="어제 마지막 번호" style="flex:1"><button class="primary" id="mbsave">저장</button></div><p class="err" id="mberr"></p>';
-    h+='<div class="row">'+[['l','점심'],['d','저녁'],['b','파란약']].map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+no+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div>';
-    if(p.medBase)h+='<p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
+  else if(k==='med'){var mc=medCfg(),bs=borSlots(),ic2=injCfg();h+='<h2>약 복용<span class="r">'+esc(medLabel())+'</span></h2>';
+    if(!anyMed())h+='<p class="hint" style="margin:0">복용 약이 없습니다. 설정 → 복용 약에서 바꿀 수 있습니다.</p>';
+    if(bs.length&&!p.medBase)h+='<p class="hint" style="margin:0;color:var(--sub)">보령: 어제 마지막으로 먹은 봉지 번호를 입력하면 오늘 먹을 번호를 알려 드립니다. 오늘 처음 시작하면 0을 입력하세요.</p><div class="row"><input id="mb" type="number" inputmode="numeric" placeholder="어제 마지막 번호" style="flex:1"><button class="primary" id="mbsave">저장</button></div><p class="err" id="mberr"></p>';
+    var btns=bs.map(function(sl){return [sl[0],sl[1]]});if(mc.blue)btns.push(['b','파란약']);
+    if(btns.length){h+=(bs.length?'<div class="hint">보령은 봉지 번호 순서대로</div>':'')+'<div class="row">'+btns.map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+no+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div><p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
+    if(ic2){h+='<div class="hint" style="margin-top:6px">'+injName()+' · 주 1회 ('+WD[ic2.day]+'요일)</div>';
+      if(d.inj)h+='<button class="med on" id="injundo" style="width:100%">'+(S.injUndo?'한 번 더 누르면 기록이 취소됩니다':'✓ '+esc(d.inj.t)+' 주사 완료 · '+d.inj.dose+'mg · '+esc(d.inj.site))+'</button>';
+      else{var ns=nextSite(d.date);h+='<div class="grid2"><label class="f">용량<select id="injdose">'+doseOpts(ic2.type,ic2.dose)+'</select></label><label class="f">부위<select id="injsite">'+SITES.map(function(x){return '<option'+(x===ns?' selected':'')+'>'+x+'</option>'}).join('')+'</select></label></div><p class="hint" style="margin:0">다음 주사일: '+label(nextDue(d.date))+' · 부위는 지난번 다음 순서로 미리 골라 둡니다.</p><button class="primary" id="injdo" style="width:100%">주사 완료</button>'}
+      h+='<div class="hint" style="margin-top:6px">오늘 식욕</div><div class="row">'+['낮음','보통','높음'].map(function(x,i){return '<button class="chip'+(d.fx&&d.fx.ap===i+1?' on':'')+'" data-ap="'+(i+1)+'" style="flex:1;justify-content:center">'+x+'</button>'}).join('')+'</div>';
+      h+='<div class="hint">불편한 증상 (해당하면 누르기)</div><div class="chips">'+SX.map(function(x){return '<button class="chip'+(d.fx&&d.fx.sx&&d.fx.sx.indexOf(x)>=0?' on':'')+'" data-sx="'+x+'">'+x+'</button>'}).join('')+'</div>';
+      if(d.fx&&d.fx.sx&&d.fx.sx.some(function(x){return x==='구토'||x==='복통'}))h+='<p class="hint" style="margin:0;color:var(--surplus)">구토나 심한 복통이 계속되면 처방받은 병원에 문의하세요.</p>';
+      var hist=Object.keys(S.days).filter(function(k2){return S.days[k2].inj}).sort().reverse().slice(0,5);
+      if(hist.length)h+='<div class="hint" style="margin-top:6px">최근 주사</div>'+hist.map(function(k2){var x=S.days[k2].inj;return '<div class="row" style="font-size:14px;justify-content:space-between"><span>'+label(k2)+'</span><span class="num">'+x.dose+'mg · '+esc(x.site)+'</span></div>'}).join('')}}
   else if(k==='water'){var wg=p.waterGoal||2000;h+='<h2>물<span class="r num">'+waterTot(d).toLocaleString('ko-KR')+' / '+wg.toLocaleString('ko-KR')+' ml</span></h2>'+(cofMl(d)?'<p class="hint" style="margin:0">물 '+(d.waterMl||0).toLocaleString('ko-KR')+' ml + 커피 '+cofMl(d).toLocaleString('ko-KR')+' ml</p>':'')+'<div class="row"><button data-water="200" style="flex:1">+200 컵</button><button data-water="500" style="flex:1">+500 병</button><button data-water="-200">-200</button></div><div class="row"><input id="wml" type="number" inputmode="numeric" placeholder="직접 입력 ml" style="flex:1"><button id="wadd">추가</button></div>'}
   else if(k==='ex'){var lc=p.lifts||[];var freq=lc.slice().sort(function(x,y){return (y.count||0)-(x.count||0)}).filter(function(l){return findEx(l.name)}).slice(0,6);
     var exOpts=function(cur){var parts=[],o='';if(freq.length)o+='<optgroup label="자주 한 운동">'+freq.map(function(l){return '<option value="'+esc(l.name)+'">'+esc(l.name)+'</option>'}).join('')+'</optgroup>';
@@ -453,19 +525,20 @@ function coachCard(d,isToday){var p=S.prof;
   else if(ph.to===rt.wk)adv.push('다음 주부터 운동 단계가 한 단계 올라갑니다.');
   h+='<p class="adv">'+adv.join(' ')+'</p></div>';
   return h}
-var ALARM0=[{id:'medL',time:'11:30',label:'점심 약 복용'},{id:'walk',time:'12:20',label:'점심 식후 산책'},{id:'medD',time:'17:30',label:'저녁 약 복용'},{id:'ex',time:'19:00',label:'저녁 운동'}];
-function alarms(){return (S.prof&&S.prof.alarms)||ALARM0}
+var ALARM_DEF=[{id:'medM',time:'07:30',label:'아침 약 복용',slot:'m'},{id:'inj',time:'09:00',label:'주사 (주사일만)'},{id:'medL',time:'11:30',label:'점심 약 복용',slot:'l'},{id:'walk',time:'12:20',label:'점심 식후 산책'},{id:'medD',time:'17:30',label:'저녁 약 복용',slot:'d'},{id:'ex',time:'19:00',label:'저녁 운동'}];
+function alarms(){var p=S.prof||{},bs=borSlots().map(function(x){return x[0]}),t=p.alarmTimes||{},old=p.alarms||[];
+  return ALARM_DEF.filter(function(a){if(a.slot)return bs.indexOf(a.slot)>=0;if(a.id==='inj')return !!injCfg();return true}).map(function(a){var o=old.find(function(x){return x.id===a.id});return {id:a.id,slot:a.slot,label:a.id==='inj'?injName()+' 주사 (주사일만)':a.label,time:t[a.id]||(o&&o.time)||a.time}})}
 function isWalk(c){return c.type==='걷기'||c.type==='빠르게 걷기'}
 function alarmDone(d,id){var sk=d.skip&&d.skip[id];if(sk)return true;var dn=d.done||{};
-  if(id==='medL')return !!medT(d.meds.l);if(id==='medD')return !!medT(d.meds.d);
+  var AD=ALARM_DEF.find(function(x){return x.id===id});if(AD&&AD.slot)return !!medT(d.meds[AD.slot]);if(id==='inj')return !mjDue(d);
   if(id==='walk')return !!dn.walk||d.cardio.some(isWalk)||!!(S.prof&&S.prof.timer);
   if(id==='ex')return !!dn.ex||d.strength.length>0||d.cardio.some(function(c){return !isWalk(c)});return !!dn[id]}
 function nowHM(){var n=new Date();return pad(n.getHours())+':'+pad(n.getMinutes())}
-function alarmStrip(d){var now=nowHM(),list=alarms().slice().sort(function(a,b){return a.time<b.time?-1:1});var due=[],next=null;
+function alarmStrip(d){var now=nowHM(),list=alarms().filter(function(a){return a.id!=='inj'||mjDue(d)}).sort(function(a,b){return a.time<b.time?-1:1});var due=[],next=null;
   list.forEach(function(a){if(alarmDone(d,a.id))return;if(a.time<=now)due.push(a);else if(!next)next=a});
   var h='';
-  due.forEach(function(a){var act=a.id==='medL'?'먹었어요 ('+medShow(d,'l')+'번)':a.id==='medD'?'먹었어요 ('+medShow(d,'d')+'번)':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
-    if((a.id==='medL'||a.id==='medD')&&!S.prof.medBase)act='번호 입력';
+  due.forEach(function(a){var act=a.slot?'먹었어요 ('+medShow(d,a.slot)+'번)':a.id==='inj'?'주사 기록':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
+    if(a.slot&&!S.prof.medBase)act='번호 입력';
     h+='<div class="alarm due"><span class="at num">'+esc(a.time)+'</span><span class="al">'+esc(a.label)+'</span><button class="primary" data-alarm="'+esc(a.id)+'">'+act+'</button><button class="icon ghost" data-askip="'+esc(a.id)+'" aria-label="오늘은 건너뛰기">×</button></div>'});
   if(next)h+='<div class="alarm"><span class="at num">'+esc(next.time)+'</span><span class="al">다음: '+esc(next.label)+'</span></div>';
   return h?'<div class="alarms">'+h+'</div>':''}
@@ -478,8 +551,8 @@ function stopTimer(){var t=S.prof.timer;if(!t)return;var st=new Date(t.start),en
   S.tmCancelAsk=false;S.keepScroll=true;touchProf(function(p){delete p.timer},true)}
 setInterval(function(){if(!S.prof||!S.prof.timer)return;Array.prototype.forEach.call(document.querySelectorAll('[data-elapsed]'),function(e){e.textContent=fmtEl(elapsedMin())})},1000);
 function alarmAct(id){var n=nowHM();S.keepScroll=true;
-  if((id==='medL'||id==='medD')&&!S.prof.medBase){S.panel='med';render();return}
-  if(id==='medL'||id==='medD'){var k=id==='medL'?'l':'d';touchDay(function(d){d.meds[k]={t:n,no:medShow(d,k)}});return}
+  var AD=ALARM_DEF.find(function(x){return x.id===id});if(id==='inj'||(AD&&AD.slot&&!S.prof.medBase)){S.panel='med';render();return}
+  if(AD&&AD.slot){touchDay(function(d){d.meds[AD.slot]={t:n,no:medShow(d,AD.slot)}});return}
   if(id==='walk'){if(!S.prof.timer)startTimer('걷기');return}
   if(id==='ex'){S.panel='ex';render();return}
   touchDay(function(d){d.done=d.done||{};d.done[id]=true})}
@@ -496,7 +569,7 @@ function uploadPhotos(files){if(!files.length||!S.assets)return;var date=S.date;
 /* ---------- 점검 ---------- */
 function weightSeries(){return Object.keys(S.days).filter(function(k){return S.days[k].weight}).sort().map(function(k){return {d:k,w:S.days[k].weight}})}
 function movAvg(series){return series.map(function(p){var from=addDays(p.d,-6);var win=series.filter(function(q){return q.d>=from&&q.d<=p.d});return {d:p.d,w:win.reduce(function(a,q){return a+q.w},0)/win.length}})}
-function eta(series,goal){if(!goal||series.length<5)return null;var last=series[series.length-1];var from=addDays(last.d,-20);var pts=series.filter(function(p){return p.d>=from});if(pts.length<5)return null;
+function eta(series,goal){if(!goal||series.length<5)return null;var last=series[series.length-1];var from=addDays(last.d,-20);var pts=series.filter(function(p){return p.d>=from});if(pts.length<6||(parse(last.d)-parse(pts[0].d))/864e5<10)return null;
   var t0=parse(pts[0].d).getTime();var xs=pts.map(function(p){return (parse(p.d).getTime()-t0)/864e5}),ys=pts.map(function(p){return p.w});var n=xs.length,mx=xs.reduce(function(a,b){return a+b})/n,my=ys.reduce(function(a,b){return a+b})/n;var num=0,den=0;for(var i=0;i<n;i++){num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)*(xs[i]-mx)}if(!den)return null;var slope=num/den;
   var cur=my+slope*(xs[n-1]-mx);if(cur<=goal)return {done:true,slope:slope};if(slope>=-0.005)return {slope:slope};var days=Math.ceil((cur-goal)/-slope);return {slope:slope,date:addDays(last.d,days),days:days}}
 function chart(series,goal){var W=520,H=200,L=40,R=12,T=14,B=26;if(series.length<2)return '<div class="empty">체중을 2일 이상 기록하면 그래프가 나타납니다.</div>';
@@ -520,7 +593,7 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
   h+='<div class="sec"><h2>체중 추이<span class="r"><span class="row" style="gap:4px">'+[[30,'30일'],[90,'90일'],[0,'전체']].map(function(r){return '<button class="chip'+(S.range===r[0]?' on':'')+'" data-range="'+r[0]+'">'+r[1]+'</button>'}).join('')+'</span></span></h2>';
   h+='<div class="grid2"><div><div class="hint">현재 (7일 평균)</div><div class="num" style="font-size:22px;font-weight:500">'+(avg.length?f1(avg[avg.length-1].w):f1(cur||0))+' kg</div></div><div><div class="hint">시작 대비</div><div class="num '+((cur-start)<=0?'neg':'pos')+'" style="font-size:22px;font-weight:500">'+((cur-start)>0?'+':'')+f1(cur-start)+' kg</div></div></div>';
   h+=chart(series,p.goal);
-  if(p.goal){h+='<p class="hint" style="font-size:13px;color:var(--sub)">'+(e?(e.done?'목표 체중에 도달했습니다.':e.date?'최근 3주 속도(주 '+f1(-e.slope*7)+' kg)라면 '+label(e.date)+'쯤 '+f1(p.goal)+' kg에 도달합니다.':'최근 3주는 체중이 줄지 않고 있어 도달일을 계산하지 않았습니다.'):'최근 3주 안에 체중 기록이 5번 이상 쌓이면 목표 도달 예상일을 보여 드립니다.')+'</p>'}
+  if(p.goal){h+='<p class="hint" style="font-size:13px;color:var(--sub)">'+(e?(e.done?'목표 체중에 도달했습니다.':e.date?'최근 3주 속도(주 '+f1(-e.slope*7)+' kg)라면 '+label(e.date)+'쯤 '+f1(p.goal)+' kg에 도달합니다.':'최근 3주는 체중이 줄지 않고 있어 도달일을 계산하지 않았습니다.'):'체중 기록이 10일 이상 쌓이면 목표 도달 예상일을 보여 드립니다. 처음 1~2주는 수분이 함께 빠져 속도가 실제보다 빠르게 계산됩니다.')+'</p>'}
   h+='</div>';
   /* 이번 주 */
   var t=parse(today());var mon=addDays(today(),-((t.getDay()+6)%7));var wk=[],net=0,logged=0;for(var i=0;i<7;i++){var k=addDays(mon,i);if(k>today())break;var b=balance(k);if(b.mealsLogged){net+=b.net;logged++}wk.push(k)}
@@ -542,7 +615,7 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
     h+='<div style="border-top:1px solid var(--line);padding-top:8px;display:grid;gap:6px">';
     MEALS.forEach(function(m){var l=sd.meals[m[0]];h+='<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">'+m[1]+'</b><span style="flex:1;min-width:0">'+(l.length?l.map(function(x){return esc(x.name)+' <span class="num hint">'+r0(x.kcal)+'</span>'}).join(', '):'<span class="hint">기록 없음</span>')+'</span></div>'});
     h+='<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">운동</b><span style="flex:1;min-width:0">'+((sd.cardio.length||sd.strength.length)?sd.cardio.map(function(c){return esc(c.type)+' '+c.min+'분'}).concat(sd.strength.map(function(s){var e=findEx(s.name);return esc(s.name||'근력')+' '+(s.reps?s.reps+(e?e.unit:'회')+'×':'')+s.sets+'세트'})).join(', '):'<span class="hint">없음</span>')+'</span></div>';
-    h+='<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">물</b><span class="num">'+waterTot(sd).toLocaleString('ko-KR')+' ml'+(cofMl(sd)?' <span class="hint">(커피 '+cofMl(sd)+')</span>':'')+'</span><b style="font-weight:500;margin-left:12px">커피</b><span>'+(sd.coffee.length?sd.coffee.map(function(c){return esc(c.name)}).join(', ')+' <span class="num hint">'+caffeine(sd)+'mg</span>':'없음')+'</span></div><div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">약</b><span>점심 '+(sd.meds.l?'✓'+(medNo(sd.meds.l)!=null?' '+medNo(sd.meds.l)+'번':'')+' '+esc(medT(sd.meds.l)):'✗')+' · 저녁 '+(sd.meds.d?'✓'+(medNo(sd.meds.d)!=null?' '+medNo(sd.meds.d)+'번':'')+' '+esc(medT(sd.meds.d)):'✗')+' · 파란약 '+(sd.meds.b?'✓ '+esc(medT(sd.meds.b)):'✗')+'</span></div>';
+    h+='<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">물</b><span class="num">'+waterTot(sd).toLocaleString('ko-KR')+' ml'+(cofMl(sd)?' <span class="hint">(커피 '+cofMl(sd)+')</span>':'')+'</span><b style="font-weight:500;margin-left:12px">커피</b><span>'+(sd.coffee.length?sd.coffee.map(function(c){return esc(c.name)}).join(', ')+' <span class="num hint">'+caffeine(sd)+'mg</span>':'없음')+'</span></div>'+(medSummary(sd)?'<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">약</b><span style="flex:1;min-width:0">'+esc(medSummary(sd))+'</span></div>':'')+'';
     if(sd.memo)h+='<div class="row" style="align-items:baseline"><b style="font-weight:500;min-width:36px">메모</b><span style="flex:1;min-width:0">'+esc(sd.memo)+'</span></div>';
     h+='</div>';
     if(sd.photos.length)h+='<div class="photos">'+sd.photos.map(function(id,i){return '<div class="ph">'+imgTag(id,label(S.sel)+' 사진 '+(i+1))+'</div>'}).join('')+'</div>'}
@@ -557,7 +630,7 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
   /* 인바디 */
   var ib=(p.inbody||[]).slice().sort(function(a,b){return a.date<b.date?-1:1});
   h+='<div class="sec"><h2>인바디 변화<span class="r"><button id="add-ib">+ 측정 추가</button></span></h2><div class="tbl"><table><thead><tr><th>측정일</th><th>체중</th><th>골격근</th><th>체지방</th><th>체지방률</th><th>기초대사</th></tr></thead><tbody>'+
-  ib.map(function(x){return '<tr><td class="num">'+esc(x.date.slice(2).replace(/-/g,'.'))+'</td><td class="num">'+f1(x.weight)+'</td><td class="num">'+(x.smm!=null?f1(x.smm):'–')+'</td><td class="num">'+(x.fatKg!=null?f1(x.fatKg):'–')+'</td><td class="num">'+(x.fatPct!=null?f1(x.fatPct)+'%':'–')+'</td><td class="num">'+r0(x.bmr)+(x.bmrEst?'*':'')+'</td></tr>'}).join('')+'</tbody></table></div>';
+  ib.map(function(x){return '<tr><td class="num">'+esc(x.date.slice(2).replace(/-/g,'.'))+(x.est?' <span class="hint">추정</span>':'')+'</td><td class="num">'+f1(x.weight)+'</td><td class="num">'+(x.smm!=null?f1(x.smm):'–')+'</td><td class="num">'+(x.fatKg!=null?f1(x.fatKg):'–')+'</td><td class="num">'+(x.fatPct!=null?f1(x.fatPct)+'%':'–')+'</td><td class="num">'+r0(x.bmr)+(x.bmrEst?'*':'')+'</td></tr>'}).join('')+'</tbody></table></div>';
   if(ib.length>1){var a=ib[0],z=ib[ib.length-1];h+='<p class="hint" style="font-size:13px;color:var(--sub)">첫 측정 대비 체지방 '+(z.fatKg!=null&&a.fatKg!=null?'<span class="num '+(z.fatKg-a.fatKg<=0?'neg':'pos')+'">'+(z.fatKg-a.fatKg>0?'+':'')+f1(z.fatKg-a.fatKg)+' kg</span>':'–')+', 골격근 '+(z.smm!=null&&a.smm!=null?'<span class="num">'+(z.smm-a.smm>0?'+':'')+f1(z.smm-a.smm)+' kg</span>':'–')+'</p>'}
   if(ib.some(function(x){return x.bmrEst}))h+='<p class="hint">* 체지방량으로 계산한 추정 기초대사량</p>';
   h+='</div>';
@@ -585,9 +658,9 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
     bind('vday','click',function(){var g=gal[S.viewer];S.sel=g.d;var x=parse(g.d);S.calY=x.getFullYear();S.calM=x.getMonth();close()})}
   else document.body.style.overflow=''}
 function photoList(){var out=[];Object.keys(S.days).sort().forEach(function(k){(S.days[k].photos||[]).forEach(function(id){out.push({d:k,id:id})})});return S.galDesc?out.reverse():out}
-function exportCsv(){var rows=[['날짜','체중kg','BMI','주차','섭취kcal','소모kcal','차이kcal','단백질g','아침','점심','저녁','간식','커피','카페인mg','물ml','유산소분','근력세트','운동내용','점심약','저녁약','파란약','사진수','메모']];
+function exportCsv(){var rows=[['날짜','체중kg','BMI','주차','섭취kcal','소모kcal','차이kcal','단백질g','아침','점심','저녁','간식','커피','카페인mg','물ml','유산소분','근력세트','운동내용','약 복용','사진수','메모']];
   Object.keys(S.days).sort().forEach(function(k){var d=getDayRO(k);if(!hasData(S.days[k]))return;var b=balance(k);
-    rows.push([k,d.weight||'',d.weight&&bmiOf(d.weight)?f1(bmiOf(d.weight)):'',dietWeek(k)||'',r0(b.inK),r0(b.out),b.mealsLogged?r0(b.net):'',r0(protOf(d))].concat(MEALS.map(function(m){return d.meals[m[0]].map(function(x){return x.name+'('+r0(x.kcal)+(x.prot!=null?'/'+r0(x.prot)+'g':'')+')'}).join(' / ')}),[d.coffee.map(function(c){return c.name+' '+(c.time||'')}).join(' / '),caffeine(d),waterTot(d),exMin(d),exSets(d),d.cardio.map(function(c){return c.type+' '+c.min+'분'}).concat(d.strength.map(function(s){return (s.name||'근력')+' '+(s.reps?s.reps+'×':'')+s.sets+'세트'})).join(' / '),(d.meds.l?(medNo(d.meds.l)!=null?medNo(d.meds.l)+'번 ':'')+medT(d.meds.l):''),(d.meds.d?(medNo(d.meds.d)!=null?medNo(d.meds.d)+'번 ':'')+medT(d.meds.d):''),(d.meds.b?medT(d.meds.b):''),d.photos.length,d.memo||'']))});
+    rows.push([k,d.weight||'',d.weight&&bmiOf(d.weight)?f1(bmiOf(d.weight)):'',dietWeek(k)||'',r0(b.inK),r0(b.out),b.mealsLogged?r0(b.net):'',r0(protOf(d))].concat(MEALS.map(function(m){return d.meals[m[0]].map(function(x){return x.name+'('+r0(x.kcal)+(x.prot!=null?'/'+r0(x.prot)+'g':'')+')'}).join(' / ')}),[d.coffee.map(function(c){return c.name+' '+(c.time||'')}).join(' / '),caffeine(d),waterTot(d),exMin(d),exSets(d),d.cardio.map(function(c){return c.type+' '+c.min+'분'}).concat(d.strength.map(function(s){return (s.name||'근력')+' '+(s.reps?s.reps+'×':'')+s.sets+'세트'})).join(' / '),medSummary(d),d.photos.length,d.memo||'']))});
   var csv='﻿'+rows.map(function(r){return r.map(function(v){v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(',')}).join('\r\n');
   S.dl.save({filename:'감량일지_'+today()+'.csv',data:new Blob([csv],{type:'text/csv'})}).catch(function(e){var x=document.getElementById('xerr');if(x&&e&&e.code!=='declined'&&e.code!=='cancelled')x.textContent='내보내지 못했습니다. 다시 시도해 주세요.'})}
 
@@ -601,8 +674,8 @@ function renderSettings(){var p=S.prof;var ib=inbodyFor(today());S.acc=S.acc||{}
   h+='<div class="sec"><h2>등록된 메뉴<span class="r">'+menus.length+'개</span></h2>'+(menus.length?menus.map(function(m){var i=p.menus.indexOf(m);return '<div class="ex-row" style="grid-template-columns:minmax(0,1fr) 70px 64px auto"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m.name)+' <span class="hint">'+(m.count||0)+'회</span></span><input type="number" inputmode="numeric" data-mk="'+i+'" value="'+r0(m.kcal)+'" aria-label="'+esc(m.name)+' 칼로리"><input type="number" inputmode="decimal" step="0.1" data-mpr="'+i+'" value="'+(m.prot!=null?m.prot:'')+'" placeholder="g" aria-label="'+esc(m.name)+' 단백질"><button class="icon ghost" data-mdel="'+i+'" aria-label="'+esc(m.name)+' 삭제">×</button></div>'}).join('')+'<p class="hint">칼로리(kcal)와 단백질(g)을 고치면 앞으로 추가하는 기록부터 반영됩니다.</p>':'<p class="hint">식단에서 메뉴를 추가하면 여기에 쌓입니다.</p>')+'</div>';
   var lb=p.lastBackup;var since=lb?Math.round((parse(today())-parse(lb))/864e5):null;
   h+='<div class="sec"><h2>알림 시간</h2><p class="hint" style="margin:0">이 페이지를 열었을 때 시간이 지났는데 기록이 없으면 맨 위에 알려 줍니다. 페이지가 닫혀 있을 때는 울리지 않으니 휴대폰 시계 앱 알람과 같이 쓰세요.</p>'+
-  alarms().map(function(a,i){return '<div class="ex-row" style="grid-template-columns:110px minmax(0,1fr)"><input type="time" data-alt="'+i+'" value="'+esc(a.time)+'" aria-label="'+esc(a.label)+' 시간"><span>'+esc(a.label)+'</span></div>'}).join('')+'</div>';
-  h+='<div class="sec"><h2>약 봉지 번호</h2><div class="row"><label class="f" style="flex:1">기준 날짜 전날까지 마지막으로 먹은 번호<input id="mbn" type="number" inputmode="numeric" value="'+(p.medBase?p.medBase.no:'')+'"></label><label class="f" style="flex:1">기준 날짜<input id="mbd" type="date" value="'+esc(p.medBase?p.medBase.date:today())+'"></label></div><p class="hint" style="margin:0">새로 처방받아 1번부터 다시 먹을 때는 기준 날짜를 첫날로, 번호를 0으로 바꾸세요.</p></div>';
+  alarms().map(function(a){return '<div class="ex-row" style="grid-template-columns:110px minmax(0,1fr)"><input type="time" data-alt="'+a.id+'" value="'+esc(a.time)+'" aria-label="'+esc(a.label)+' 시간"><span>'+esc(a.label)+'</span></div>'}).join('')+'</div>';
+  h+='<div class="sec"><h2>복용 약<span class="r">'+esc(medLabel())+'</span></h2>'+medForm('st')+(borSlots().length?'<div class="row"><label class="f" style="flex:1">보령: 기준일 전날까지 마지막 번호<input id="mbn" type="number" inputmode="numeric" value="'+(p.medBase?p.medBase.no:'')+'"></label><label class="f" style="flex:1">기준 날짜<input id="mbd" type="date" value="'+esc(p.medBase?p.medBase.date:today())+'"></label></div><p class="hint" style="margin:0">새로 처방받아 1번부터 다시 먹을 때는 기준 날짜를 첫날로, 번호를 0으로 바꾸세요.</p>':'')+'</div>';
   var el=exLib();
   h+='<div class="sec"><h2>근력 운동 목록<span class="r">'+el.length+'개</span></h2><p class="hint" style="margin:0">세트당 kcal은 체중 70kg, 기준 횟수 1세트 기준 추정치입니다. 실제 계산은 그날 체중과 입력한 횟수에 비례해 바뀝니다.</p>'+
   '<div class="ex-row" style="grid-template-columns:70px minmax(0,1fr) 58px 58px 32px;font-size:12px;color:var(--sub)"><span>부위</span><span>운동</span><span>기준</span><span>kcal</span><span></span></div>'+
@@ -636,7 +709,8 @@ function renderSettings(){var p=S.prof;var ib=inbodyFor(today());S.acc=S.acc||{}
   bind('st-sw','change',function(e){var v=parseFloat(e.target.value);if(v>25&&v<300)touchProf(function(p){p.startWeight=v})});
   bind('st-wk','change',function(e){var v=parseInt(e.target.value,10);if(v>=1){S.keepScroll=true;touchProf(function(p){p.dietStart=addDays(today(),-(v-1)*7)},true)}});
   bind('st-ds','change',function(e){if(e.target.value){S.keepScroll=true;touchProf(function(p){p.dietStart=e.target.value},true)}});
-  all('[data-alt]',function(i){i.onchange=function(){if(!/^\d{2}:\d{2}$/.test(i.value))return;if(!S.prof.alarms)S.prof.alarms=clone(ALARM0);S.prof.alarms[+i.dataset.alt].time=i.value;touchProf(function(){})}});
+  all('[data-alt]',function(i){i.onchange=function(){if(!/^\d{2}:\d{2}$/.test(i.value))return;S.prof.alarmTimes=S.prof.alarmTimes||{};S.prof.alarmTimes[i.dataset.alt]=i.value;touchProf(function(){})}});
+  wireMedForm('st',function(){var c=readMedForm('st');S.acc['복용 약']=true;S.keepScroll=true;touchProf(function(p){p.medSetup=c},true)});
   function saveMb(){var v=parseInt(document.getElementById('mbn').value,10),dt=document.getElementById('mbd').value;if(isNaN(v)||v<0||!dt)return;touchProf(function(p){p.medBase={date:dt,no:v}})}
   bind('mbn','change',saveMb);bind('mbd','change',saveMb);
   function ensureEx(){if(!S.prof.exLib)S.prof.exLib=clone(EXLIB0)}function ensureCf(){if(!S.prof.cofLib)S.prof.cofLib=clone(COF0);S.prof.cofLib.forEach(function(c){if(c.ml==null)c.ml=cofMlOf(c)})}
