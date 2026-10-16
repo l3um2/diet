@@ -63,6 +63,8 @@ label.f{display:grid;gap:4px;font-size:14px;color:var(--sub)}
 .balance>div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 4px}
 .balance .l{font-size:13px;color:var(--sub)}
 .balance .v{font-family:var(--f-num);font-size:20px;font-weight:500}
+.balance .v{white-space:nowrap}
+.balance .vs{font-size:12px;color:var(--sub);margin-left:2px;font-weight:400}
 .neg{color:var(--deficit)}.pos{color:var(--surplus)}
 .scale{display:flex;align-items:baseline;gap:6px}
 .scale input{font-family:var(--f-num);font-size:28px;font-weight:500;max-width:150px;text-align:right}
@@ -261,6 +263,8 @@ function cardioKcal(c,w){return Math.max(0,(CARDIO[c.type]||4)-1)*w*(c.min/60)}
 function strengthKcal(s,w){var e=findEx(s.name);if(!e)return 4*w*(3/60)*s.sets;var reps=+s.reps||e.reps;return e.kcal*(w/70)*(reps/e.reps)*s.sets}
 function exKcal(d){var w=weightFor(d.date);var a=0;d.cardio.forEach(function(c){a+=cardioKcal(c,w)});d.strength.forEach(function(s){a+=strengthKcal(s,w)});return a}
 function burn(d){var ib=inbodyFor(d.date);var bmr=ib?ib.bmr:0;var act=(S.prof&&S.prof.activity)||1.2;return {bmr:bmr,base:bmr*act,ex:exKcal(d),total:bmr*act+exKcal(d)}}
+function dayFrac(){var n=new Date();return (n.getHours()*60+n.getMinutes())/1440}
+function burnNow(bal,isToday){return isToday?bal.b.base*dayFrac()+bal.b.ex:bal.out}
 function balance(d){d=getDayRO(d);var i=intake(d),b=burn(d);return {inK:i,out:b.total,net:i-b.total,b:b,mealsLogged:mealCount(d)>0}}
 function getDayRO(d){if(typeof d==='string')d=S.days[d]||blankDay(d);var c=clone(d);c.meals=c.meals||{};MEALS.forEach(function(m){c.meals[m[0]]=c.meals[m[0]]||[]});c.cardio=c.cardio||[];c.strength=c.strength||[];c.coffee=c.coffee||[];c.meds=c.meds||{};c.photos=c.photos||[];return c}
 function exMin(d){return (d.cardio||[]).reduce(function(a,c){return a+(+c.min||0)},0)}
@@ -359,7 +363,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   if(!isToday)h+='<p class="hint" style="margin:-6px 0 10px">지난 날짜를 수정하는 중입니다. <button class="ghost" id="go-today" style="min-height:0;padding:0;color:var(--accent)">오늘로 이동</button></p>';
   var lbk=p.lastBackup,dsb=lbk?Math.round((parse(today())-parse(lbk))/864e5):null;
   if(S.mode==='local'&&Object.keys(S.days).length>=3&&(dsb==null||dsb>=7))h+='<div class="sec" style="background:var(--surplus-soft);border-color:transparent;padding:10px 12px;display:flex;gap:8px;align-items:center"><span style="flex:1;font-size:14px">'+(lbk?dsb+'일째 백업하지 않았습니다.':'아직 백업 파일이 없습니다.')+'</span><button id="bk-now">백업하기</button></div>';
-  h+='<div class="balance" style="margin-bottom:12px"><div><div class="l">섭취</div><div class="v">'+r0(bal.inK).toLocaleString('ko-KR')+'</div></div><div><div class="l">소모 (추정)</div><div class="v">'+r0(bal.out).toLocaleString('ko-KR')+'</div></div><div><div class="l">차이 kcal</div><div class="v '+(bal.mealsLogged?(bal.net<=0?'neg':'pos'):'')+'">'+(bal.mealsLogged?sgn(bal.net):'–')+'</div></div></div>';
+  h+='<div class="balance" style="margin-bottom:12px"><div><div class="l">섭취</div><div class="v">'+r0(bal.inK).toLocaleString('ko-KR')+'</div></div><div><div class="l">소모 (추정)</div><div class="v"><span data-burnnow>'+r0(burnNow(bal,isToday)).toLocaleString('ko-KR')+'</span>'+(isToday?'<span class="vs">/'+r0(bal.out).toLocaleString('ko-KR')+'</span>':'')+'</div></div><div><div class="l">차이 kcal</div><div class="v '+(bal.mealsLogged?(bal.net<=0?'neg':'pos'):'')+'">'+(bal.mealsLogged?sgn(bal.net):'–')+'</div></div></div>';
   /* 알림 */
   if(isToday)h+=alarmStrip(d);
   if(p.timer)h+=timerBanner();
@@ -784,6 +788,7 @@ function softRender(){var a=document.activeElement;if(a&&(a.tagName==='INPUT'||a
 S.follow=true;
 function rollDay(){if(S.view==='today'&&S.date===today()&&S.prof)softRender();var t=today();if(S.follow&&S.date!==t&&S.profLoaded&&S.prof){S.date=t;S.openMeal=null;if(S.view==='today')softRender()}}
 document.addEventListener('visibilitychange',function(){if(!document.hidden)rollDay()});window.addEventListener('focus',rollDay);setInterval(rollDay,60000);
+setInterval(function(){var e=document.querySelector('[data-burnnow]');if(!e||S.view!=='today'||S.date!==today())return;e.textContent=r0(burnNow(balance(getDayRO(S.date)),true)).toLocaleString('ko-KR')},60000);
 render();start();
 })();
 </script>
