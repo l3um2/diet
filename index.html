@@ -82,9 +82,9 @@ label.f{display:grid;gap:4px;font-size:14px;color:var(--sub)}
 .ph .x{position:absolute;top:4px;right:4px;background:var(--panel);border-radius:99px;width:26px;height:26px}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal .dow{font-size:12px;text-align:center;color:var(--sub);padding-block:2px}
-.cell{border:1px solid var(--line);background:var(--panel);border-radius:8px;min-height:58px;padding:4px 3px;display:grid;align-content:start;gap:1px;text-align:center;cursor:pointer;font:inherit;color:var(--ink);min-width:0}
+.cell{border:1px solid var(--line);background:var(--panel);border-radius:8px;min-height:58px;padding:4px 1px;display:grid;align-content:start;gap:1px;text-align:center;cursor:pointer;font:inherit;color:var(--ink);min-width:0}
 .cell .d{font-size:12px;color:var(--sub)}
-.cell .n{font-family:var(--f-num);font-size:11.5px;font-weight:500;overflow:hidden;white-space:nowrap}
+.cell .n{font-family:var(--f-num);font-size:11px;letter-spacing:-.6px;font-weight:500;overflow:hidden;white-space:nowrap}
 .cell .t{font-size:11px;color:var(--mute);white-space:nowrap;overflow:hidden}
 .cell.blank{visibility:hidden}
 .cell.today{border-color:var(--accent)}
@@ -265,6 +265,7 @@ function exKcal(d){var w=weightFor(d.date);var a=0;d.cardio.forEach(function(c){
 function burn(d){var ib=inbodyFor(d.date);var bmr=ib?ib.bmr:0;var act=(S.prof&&S.prof.activity)||1.2;return {bmr:bmr,base:bmr*act,ex:exKcal(d),total:bmr*act+exKcal(d)}}
 function dayFrac(){var n=new Date();return (n.getHours()*60+n.getMinutes())/1440}
 function burnNow(bal,isToday){return isToday?bal.b.base*dayFrac()+bal.b.ex:bal.out}
+function balNow(k){var b=balance(k);if(k===today()){var o=burnNow(b,true);b.out=o;b.net=b.inK-o}return b}
 function balance(d){d=getDayRO(d);var i=intake(d),b=burn(d);return {inK:i,out:b.total,net:i-b.total,b:b,mealsLogged:mealCount(d)>0}}
 function getDayRO(d){if(typeof d==='string')d=S.days[d]||blankDay(d);var c=clone(d);c.meals=c.meals||{};MEALS.forEach(function(m){c.meals[m[0]]=c.meals[m[0]]||[]});c.cardio=c.cardio||[];c.strength=c.strength||[];c.coffee=c.coffee||[];c.meds=c.meds||{};c.photos=c.photos||[];return c}
 function exMin(d){return (d.cardio||[]).reduce(function(a,c){return a+(+c.min||0)},0)}
@@ -403,7 +404,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   bind('prev','click',function(){S.date=addDays(S.date,-1);S.follow=S.date===today();S.openMeal=null;render()});
   bind('next','click',function(){S.date=addDays(S.date,1);S.follow=S.date===today();S.openMeal=null;render()});
   bind('go-today','click',function(){S.date=today();S.follow=true;render()});
-  bind('go-check','click',function(){S.view='check';var t=parse(S.date);S.calY=t.getFullYear();S.calM=t.getMonth();S.sel=S.date;render();window.scrollTo(0,0)});
+  bind('go-check','click',function(){S.view='check';S.wkOff=0;var t=parse(S.date);S.calY=t.getFullYear();S.calM=t.getMonth();S.sel=S.date;render();window.scrollTo(0,0)});
   bind('go-set','click',function(){S.view='settings';render();window.scrollTo(0,0)});
   bind('bk-now','click',function(){S.view='settings';render();window.scrollTo(0,0);backup()});
   bind('w','input',function(e){var v=parseFloat(e.target.value);touchDay(function(d){d.weight=isNaN(v)?null:Math.round(v*10)/10},false)});
@@ -600,15 +601,16 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
   if(p.goal){h+='<p class="hint" style="font-size:13px;color:var(--sub)">'+(e?(e.done?'목표 체중에 도달했습니다.':e.date?'최근 3주 속도(주 '+f1(-e.slope*7)+' kg)라면 '+label(e.date)+'쯤 '+f1(p.goal)+' kg에 도달합니다.':'최근 3주는 체중이 줄지 않고 있어 도달일을 계산하지 않았습니다.'):'체중 기록이 10일 이상 쌓이면 목표 도달 예상일을 보여 드립니다. 처음 1~2주는 수분이 함께 빠져 속도가 실제보다 빠르게 계산됩니다.')+'</p>'}
   h+='</div>';
   /* 이번 주 */
-  var t=parse(today());var mon=addDays(today(),-((t.getDay()+6)%7));var wk=[],net=0,logged=0;for(var i=0;i<7;i++){var k=addDays(mon,i);if(k>today())break;var b=balance(k);if(b.mealsLogged){net+=b.net;logged++}wk.push(k)}
-  h+='<div class="sec"><h2>이번 주 칼로리<span class="r">'+label(mon).replace(/ \(.\)/,'')+'부터 · 식단 기록 '+logged+'일</span></h2>'+(logged?'<div class="row" style="align-items:baseline"><span class="num '+(net<=0?'neg':'pos')+'" style="font-size:24px;font-weight:500">'+sgn(net)+' kcal</span><span class="hint" style="font-size:13px">체지방 약 '+(net<=0?'':'+')+f1(net/7700)+' kg 해당</span></div>':'<p class="hint">식단을 기록한 날이 쌓이면 주간 합계를 보여 드립니다.</p>')+'<p class="hint">하루 추정치는 ±200~300 kcal 오차가 있어 주간 합계로 판단하는 것이 정확합니다.</p></div>';
+  var t=parse(today());var mon0=addDays(today(),-((t.getDay()+6)%7));var wo=S.wkOff||0;var mon=addDays(mon0,wo*7),sun=addDays(mon,6);var net=0,logged=0;for(var i=0;i<7;i++){var k=addDays(mon,i);if(k>today())break;var b=balNow(k);if(b.mealsLogged){net+=b.net;logged++}}
+  var md=function(x){return label(x).replace(/ \(.\)/,'')};var dayN=wo===0?((t.getDay()+6)%7)+1:7;
+  h+='<div class="sec"><h2><button class="icon ghost" id="wprev" aria-label="이전 주">‹</button>'+(wo===0?'이번 주':wo===-1?'지난주':(-wo)+'주 전')+' 칼로리<button class="icon ghost" id="wnext" aria-label="다음 주"'+(wo===0?' disabled style="visibility:hidden"':'')+'>›</button></h2><div class="hint" style="margin-top:-6px">기준일 ('+md(mon)+' ~ '+md(sun)+', '+(wo===0?dayN+'일차':'완료')+')</div>'+(logged?'<div class="row" style="align-items:baseline"><span class="num '+(net<=0?'neg':'pos')+'" style="font-size:24px;font-weight:500">'+sgn(net)+' kcal</span><span class="hint" style="font-size:13px">체지방 약 '+(net<=0?'':'+')+f1(net/7700)+' kg 해당</span></div>':'<p class="hint">이 주에는 식단을 기록한 날이 없습니다.</p>')+'<p class="hint">'+(wo===0?'오늘은 지금 시각까지의 섭취와 소모로 계산합니다. ':'')+'식단을 기록하지 않은 날은 합계에서 뺍니다. 하루 추정치는 ±200~300 kcal 오차가 있어 주간 합계로 판단하는 것이 정확합니다.</p>'+(wo!==0?'<button id="wnow" style="justify-self:start">이번 주로</button>':'')+'</div>';
   /* 달력 */
   var first=new Date(S.calY,S.calM,1),days=new Date(S.calY,S.calM+1,0).getDate();
   h+='<div class="sec"><h2><button class="icon ghost" id="cprev" aria-label="이전 달">‹</button>'+S.calY+'년 '+(S.calM+1)+'월<button class="icon ghost" id="cnext" aria-label="다음 달">›</button><span class="r"></span></h2>';
-  h+='<div class="legend"><span><b class="neg">파랑</b> 소모 &gt; 섭취</span><span><b class="pos">빨강</b> 섭취 &gt; 소모</span><span>아래 줄: 운동 시간·세트</span></div><div class="cal">'+DOW.map(function(x){return '<div class="dow">'+x+'</div>'}).join('');
-  for(var b0=0;b0<first.getDay();b0++)h+='<div class="cell blank"></div>';
+  h+='<div class="legend"><span><b class="neg">파랑</b> 소모 &gt; 섭취</span><span><b class="pos">빨강</b> 섭취 &gt; 소모</span><span>아래 줄: 운동 시간·세트</span></div><div class="cal">'+['월','화','수','목','금','토','일'].map(function(x){return '<div class="dow">'+x+'</div>'}).join('');
+  for(var b0=0;b0<(first.getDay()+6)%7;b0++)h+='<div class="cell blank"></div>';
   for(var dd=1;dd<=days;dd++){var key=S.calY+'-'+pad(S.calM+1)+'-'+pad(dd);var day=S.days[key];var cls='cell'+(key===today()?' today':'')+(key===S.sel?' sel':'');var n='',tt='';
-    if(day&&hasData(day)){var bb=balance(key);if(bb.mealsLogged){n='<span class="n '+(bb.net<=0?'neg':'pos')+'">'+sgn(bb.net)+'</span>';cls+=bb.net<=0?' def':' sur'}else n='<span class="n" style="color:var(--mute)">식단 –</span>';var m=exMin(day),st=exSets(day);tt=m||st?'<span class="t">'+(m?m+'분':'')+(m&&st?' ':'')+(st?st+'s':'')+'</span>':''}
+    if(day&&hasData(day)){var bb=balNow(key);if(bb.mealsLogged){n='<span class="n '+(bb.net<=0?'neg':'pos')+'">'+(bb.net>0?'+':'')+r0(bb.net)+'</span>';cls+=bb.net<=0?' def':' sur'}else n='<span class="n" style="color:var(--mute)">식단 –</span>';var m=exMin(day),st=exSets(day);tt=m||st?'<span class="t">'+(m?m+'분':'')+(m&&st?' ':'')+(st?st+'s':'')+'</span>':''}
     h+='<button class="'+cls+'" data-day="'+key+'" aria-label="'+label(key)+'"><span class="d">'+dd+'</span>'+n+tt+'</button>'}
   h+='</div></div>';
   /* 선택일 상세 */
@@ -642,6 +644,7 @@ function renderCheck(){var p=S.prof;var allW=weightSeries();var series=S.range?a
   app.innerHTML=h;
   bind('back','click',function(){S.view='today';S.viewer=null;document.body.style.overflow='';render();window.scrollTo(0,0)});
   all('[data-range]',function(b){b.onclick=function(){S.range=+b.dataset.range;S.keepScroll=true;render()}});
+  bind('wprev','click',function(){S.wkOff=(S.wkOff||0)-1;S.keepScroll=true;render()});bind('wnext','click',function(){S.wkOff=Math.min(0,(S.wkOff||0)+1);S.keepScroll=true;render()});bind('wnow','click',function(){S.wkOff=0;S.keepScroll=true;render()});
   bind('cprev','click',function(){S.calM--;if(S.calM<0){S.calM=11;S.calY--}S.keepScroll=true;render()});
   bind('cnext','click',function(){S.calM++;if(S.calM>11){S.calM=0;S.calY++}S.keepScroll=true;render()});
   all('[data-day]',function(b){b.onclick=function(){S.sel=b.dataset.day;S.keepScroll=true;render()}});
