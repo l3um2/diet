@@ -206,7 +206,9 @@ function medT(m){return m?(typeof m==='object'?m.t:m):null}
 function medNo(m){return m&&typeof m==='object'?m.no:null}
 function medPlan(d){var b=S.prof&&S.prof.medBase,out={};if(!b)return out;var mx=b.no;
   Object.keys(S.days).forEach(function(k){if(k<b.date||k>=d.date)return;var md=S.days[k].meds||{};['m','l','d'].forEach(function(x){var n=medNo(md[x]);if(n!=null&&n>mx)mx=n})});
-  var cur=mx;borSlots().forEach(function(sl){var n=medNo((d.meds||{})[sl[0]]);if(n!=null){cur=n;out[sl[0]]=n}else{cur+=1;out[sl[0]]=cur}});return out}
+  /* 실제로 먹은 봉지만 번호를 씀: 안 먹은 칸은 '다음 봉지 번호'를 보여 주고, 뒤 칸을 먼저 먹었으면 건너뛴 칸으로 봄 */
+  var sl=borSlots(),md=d.meds||{},last=-1;sl.forEach(function(x,i){if(medNo(md[x[0]])!=null)last=i});
+  var cur=mx;sl.forEach(function(x,i){var n=medNo(md[x[0]]);if(n!=null){cur=n;out[x[0]]=n}else out[x[0]]=i<last?null:cur+1});return out}
 function medShow(d,slot){var n=medNo((d.meds||{})[slot]);if(n!=null)return n;var pl=medPlan(d);return pl[slot]!=null?pl[slot]:null}
 function lastInj(before){var ks=Object.keys(S.days).filter(function(k){return k<before&&S.days[k].inj}).sort();return ks.length?ks[ks.length-1]:null}
 function nextDue(date){var c=injCfg();var li=lastInj(date);if(li)return addDays(li,7);var diff=((c?c.day:0)-parse(date).getDay()+7)%7;return addDays(date,diff)}
