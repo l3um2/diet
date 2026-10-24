@@ -204,11 +204,16 @@ function anyMed(){return !!(borSlots().length||medCfg().blue||injCfg())}
 function medLabel(){var c=medCfg(),a=[];if(borSlots().length)a.push('보령 '+borSlots().length+'회');if(c.blue)a.push('파란약');if(injCfg())a.push(injName());return a.length?a.join(' · '):'없음'}
 function medT(m){return m?(typeof m==='object'?m.t:m):null}
 function medNo(m){return m&&typeof m==='object'?m.no:null}
-function medPlan(d){var b=S.prof&&S.prof.medBase,out={};if(!b)return out;var mx=b.no;
-  Object.keys(S.days).forEach(function(k){if(k<b.date||k>=d.date)return;var md=S.days[k].meds||{};['m','l','d'].forEach(function(x){var n=medNo(md[x]);if(n!=null&&n>mx)mx=n})});
-  /* 실제로 먹은 봉지만 번호를 씀: 안 먹은 칸은 '다음 봉지 번호'를 보여 주고, 뒤 칸을 먼저 먹었으면 건너뛴 칸으로 봄 */
-  var sl=borSlots(),md=d.meds||{},last=-1;sl.forEach(function(x,i){if(medNo(md[x[0]])!=null)last=i});
-  var cur=mx;sl.forEach(function(x,i){var n=medNo(md[x[0]]);if(n!=null){cur=n;out[x[0]]=n}else out[x[0]]=i<last?null:cur+1});return out}
+/* 보령 번호: 지난날은 실제로 먹은 봉지만 셈. 오늘·앞으로는 봉지 순서대로 예정 번호를 이어 붙이고,
+   뒤 칸을 먼저 먹으면 앞 칸은 건너뛴 것(x)으로 봄 */
+function medStart(date){var b=S.prof&&S.prof.medBase;if(!b||date<b.date)return null;var lim=date<today()?date:today(),mx=b.no;
+  Object.keys(S.days).forEach(function(k){if(k<b.date||k>=lim)return;var md=S.days[k].meds||{};['m','l','d'].forEach(function(x){var n=medNo(md[x]);if(n!=null&&n>mx)mx=n})});
+  for(var k=lim;k<date;k=addDays(k,1))mx=medDay(S.days[k]||blankDay(k),mx).cur;return mx}
+function medDay(d,cur){var sl=borSlots(),md=d.meds||{},last=-1,out={};sl.forEach(function(x,i){if(medNo(md[x[0]])!=null)last=i});
+  sl.forEach(function(x,i){var n=medNo(md[x[0]]);if(n!=null){cur=n;out[x[0]]=n}else if(i<last)out[x[0]]='x';else{cur+=1;out[x[0]]=cur}});return {out:out,cur:cur}}
+function medPlan(d){var c=medStart(d.date);return c==null?{}:medDay(d,c).out}
+function medNext(d,slot){var n0=medNo((d.meds||{})[slot]);if(n0!=null)return n0;var c=medStart(d.date);if(c==null)return null;var md=d.meds||{};
+  borSlots().some(function(x){if(x[0]===slot)return true;var n=medNo(md[x[0]]);if(n!=null)c=n;return false});return c+1}
 function medShow(d,slot){var n=medNo((d.meds||{})[slot]);if(n!=null)return n;var pl=medPlan(d);return pl[slot]!=null?pl[slot]:null}
 function lastInj(before){var ks=Object.keys(S.days).filter(function(k){return k<before&&S.days[k].inj}).sort();return ks.length?ks[ks.length-1]:null}
 function nextDue(date){var c=injCfg();var li=lastInj(date);if(li)return addDays(li,7);var diff=((c?c.day:0)-parse(date).getDay()+7)%7;return addDays(date,diff)}
@@ -381,7 +386,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   /* 주요 4칸 */
   var mealK=MEALS.reduce(function(t,m){return t+d.meals[m[0]].reduce(function(u,x){return u+(+x.kcal||0)},0)},0);
   var mplan=medPlan(d),mcells=[];borSlots().forEach(function(sl){mcells.push([sl[1],d.meds[sl[0]],p.medBase?mplan[sl[0]]:null])});if(medCfg().blue)mcells.push(['파란약',d.meds.b,null]);
-  var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no!=null?no+'번':'–')+'</span></span>'};
+  var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no==='x'?'✗':no!=null?no+'번':'–')+'</span></span>'};
   var ic=injCfg(),ncell=mcells.length+(ic?1:0);
   var medGrid='<span class="mgrid" style="grid-template-columns:repeat('+Math.max(1,Math.min(3,ncell))+',minmax(0,1fr))">'+mcells.map(function(c){return medCell(c[0],c[1],c[2])}).join('')+(ic?'<span class="mc'+(d.inj?' on':'')+'"><span class="ml">'+injName()+'</span><span class="mt num">'+injShort(d)+'</span></span>':'')+'</span>';
   var medDone=mcells.every(function(c){return medT(c[1])})&&(!ic||!mjDue(d));
@@ -425,7 +430,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   bind('mk','keydown',function(e){if(e.key==='Enter')document.getElementById('mp').focus()});
   bind('mp','keydown',function(e){if(e.key==='Enter')document.getElementById('madd').click()});
   bind('madd','click',function(){var n=document.getElementById('mn').value.trim(),k=parseFloat(document.getElementById('mk').value);if(!n){document.getElementById('merr').textContent='메뉴 이름을 입력해 주세요.';return}if(isNaN(k)||k<0){document.getElementById('merr').textContent='칼로리를 숫자로 입력해 주세요. 모르면 대략적인 값도 괜찮습니다.';return}var pr=parseFloat(document.getElementById('mp').value);addMeal(n,k,isNaN(pr)?null:pr)});
-  all('[data-med]',function(b){b.onclick=function(){var k=b.dataset.med;S.keepScroll=true;touchDay(function(d){var n=new Date();if(d.meds[k]){d.meds[k]=null;return}d.meds[k]=k==='b'?{t:pad(n.getHours())+':'+pad(n.getMinutes())}:{t:pad(n.getHours())+':'+pad(n.getMinutes()),no:medShow(d,k)}})}});
+  all('[data-med]',function(b){b.onclick=function(){var k=b.dataset.med;S.keepScroll=true;touchDay(function(d){var n=new Date();if(d.meds[k]){d.meds[k]=null;return}d.meds[k]=k==='b'?{t:pad(n.getHours())+':'+pad(n.getMinutes())}:{t:pad(n.getHours())+':'+pad(n.getMinutes()),no:medNext(d,k)}})}});
   bind('injdo','click',function(){var c=injCfg();if(!c)return;var dose=+document.getElementById('injdose').value,site=document.getElementById('injsite').value,n=nowHM();S.keepScroll=true;if(dose!==c.dose)touchProf(function(p){var ms=p.medSetup||medCfg();ms.inj.dose=dose;p.medSetup=ms});touchDay(function(d){d.inj={t:n,dose:dose,site:site,type:c.type}})});
   bind('injundo','click',function(){S.keepScroll=true;if(S.injUndo){S.injUndo=false;touchDay(function(d){delete d.inj})}else{S.injUndo=true;render()}});
   all('[data-ap]',function(b){b.onclick=function(){var v=+b.dataset.ap;S.keepScroll=true;touchDay(function(d){d.fx=d.fx||{};d.fx.ap=d.fx.ap===v?null:v})}});
@@ -462,7 +467,7 @@ function panel(d,k){var p=S.prof,h='<div class="sec panel">';
     if(!anyMed())h+='<p class="hint" style="margin:0">복용 약이 없습니다. 설정 → 복용 약에서 바꿀 수 있습니다.</p>';
     if(bs.length&&!p.medBase)h+='<p class="hint" style="margin:0;color:var(--sub)">보령: 어제 마지막으로 먹은 봉지 번호를 입력하면 오늘 먹을 번호를 알려 드립니다. 오늘 처음 시작하면 0을 입력하세요.</p><div class="row"><input id="mb" type="number" inputmode="numeric" placeholder="어제 마지막 번호" style="flex:1"><button class="primary" id="mbsave">저장</button></div><p class="err" id="mberr"></p>';
     var btns=bs.map(function(sl){return [sl[0],sl[1]]});if(mc.blue)btns.push(['b','파란약']);
-    if(btns.length){h+=(bs.length?'<div class="hint">보령은 봉지 번호 순서대로</div>':'')+'<div class="row">'+btns.map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+no+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div><p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
+    if(btns.length){h+=(bs.length?'<div class="hint">보령은 봉지 번호 순서대로</div>':'')+'<div class="row">'+btns.map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+(no==='x'?'건너뜀':no)+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div><p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
     if(ic2){h+='<div class="hint" style="margin-top:6px">'+injName()+' · 주 1회 ('+WD[ic2.day]+'요일)</div>';
       if(d.inj)h+='<button class="med on" id="injundo" style="width:100%">'+(S.injUndo?'한 번 더 누르면 기록이 취소됩니다':'✓ '+esc(d.inj.t)+' 주사 완료 · '+d.inj.dose+'mg · '+esc(d.inj.site))+'</button>';
       else{var ns=nextSite(d.date);h+='<div class="grid2"><label class="f">용량<select id="injdose">'+doseOpts(ic2.type,ic2.dose)+'</select></label><label class="f">부위<select id="injsite">'+SITES.map(function(x){return '<option'+(x===ns?' selected':'')+'>'+x+'</option>'}).join('')+'</select></label></div><p class="hint" style="margin:0">다음 주사일: '+label(nextDue(d.date))+' · 부위는 지난번 다음 순서로 미리 골라 둡니다.</p><button class="primary" id="injdo" style="width:100%">주사 완료</button>'}
@@ -549,7 +554,7 @@ function nowHM(){var n=new Date();return pad(n.getHours())+':'+pad(n.getMinutes(
 function alarmStrip(d){var now=nowHM(),list=alarms().filter(function(a){return a.id!=='inj'||mjDue(d)}).sort(function(a,b){return a.time<b.time?-1:1});var due=[],next=null;
   list.forEach(function(a){if(alarmDone(d,a.id))return;if(a.time<=now)due.push(a);else if(!next)next=a});
   var h='';
-  due.forEach(function(a){var act=a.slot?'먹었어요 ('+medShow(d,a.slot)+'번)':a.id==='inj'?'주사 기록':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
+  due.forEach(function(a){var act=a.slot?'먹었어요 ('+medNext(d,a.slot)+'번)':a.id==='inj'?'주사 기록':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
     if(a.slot&&!S.prof.medBase)act='번호 입력';
     h+='<div class="alarm due"><span class="at num">'+esc(a.time)+'</span><span class="al">'+esc(a.label)+'</span><button class="primary" data-alarm="'+esc(a.id)+'">'+act+'</button><button class="icon ghost" data-askip="'+esc(a.id)+'" aria-label="오늘은 건너뛰기">×</button></div>'});
   if(next)h+='<div class="alarm"><span class="at num">'+esc(next.time)+'</span><span class="al">다음: '+esc(next.label)+'</span></div>';
@@ -564,7 +569,7 @@ function stopTimer(){var t=S.prof.timer;if(!t)return;var st=new Date(t.start),en
 setInterval(function(){if(!S.prof||!S.prof.timer)return;Array.prototype.forEach.call(document.querySelectorAll('[data-elapsed]'),function(e){e.textContent=fmtEl(elapsedMin())})},1000);
 function alarmAct(id){var n=nowHM();S.keepScroll=true;
   var AD=ALARM_DEF.find(function(x){return x.id===id});if(id==='inj'||(AD&&AD.slot&&!S.prof.medBase)){S.panel='med';render();return}
-  if(AD&&AD.slot){touchDay(function(d){d.meds[AD.slot]={t:n,no:medShow(d,AD.slot)}});return}
+  if(AD&&AD.slot){touchDay(function(d){d.meds[AD.slot]={t:n,no:medNext(d,AD.slot)}});return}
   if(id==='walk'){if(!S.prof.timer)startTimer('걷기');return}
   if(id==='ex'){S.panel='ex';render();return}
   touchDay(function(d){d.done=d.done||{};d.done[id]=true})}
