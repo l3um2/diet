@@ -203,6 +203,9 @@ function injName(t){var i=t?{type:t}:injCfg();return i&&INJ[i.type]?INJ[i.type].
 function anyMed(){return !!(borSlots().length||medCfg().blue||injCfg())}
 function medLabel(){var c=medCfg(),a=[];if(borSlots().length)a.push('보령 '+borSlots().length+'회');if(c.blue)a.push('파란약');if(injCfg())a.push(injName());return a.length?a.join(' · '):'없음'}
 function medT(m){return m?(typeof m==='object'?m.t:m):null}
+/* 봉지 번호는 내부적으로 계속 이어 세고(46, 47…), 화면에는 한 바퀴(기본 45개) 기준으로 1번부터 다시 보여 줌 */
+function medCycle(){var c=S.prof&&S.prof.medCycle;return c==null?45:+c||0}
+function dNo(n){if(n==null||n==='x')return n;var c=medCycle();return c>0?((n-1)%c+c)%c+1:n}
 function medNo(m){return m&&typeof m==='object'?m.no:null}
 /* 보령 번호: 지난날은 실제로 먹은 봉지만 셈. 오늘·앞으로는 봉지 순서대로 예정 번호를 이어 붙이고,
    뒤 칸을 먼저 먹으면 앞 칸은 건너뛴 것(x)으로 봄 */
@@ -220,8 +223,8 @@ function nextDue(date){var c=injCfg();var li=lastInj(date);if(li)return addDays(
 function mjDue(d){return !!injCfg()&&!d.inj&&nextDue(d.date)<=d.date}
 function nextSite(date){var li=lastInj(date);if(!li)return SITES[0];var i=SITES.indexOf(S.days[li].inj.site);return SITES[(i+1)%SITES.length]}
 function injShort(d){if(d.inj)return esc(d.inj.t);var n=Math.round((parse(nextDue(d.date))-parse(d.date))/864e5);return n<0?'<span class="pos">'+(-n)+'일↑</span>':n===0?'<span class="pos">오늘</span>':'D-'+n}
-function medSummary(d){var c=medCfg(),a=[];d.meds=d.meds||{};borSlots().forEach(function(sl){var m=d.meds[sl[0]];a.push(sl[1]+' '+(m?'✓'+(medNo(m)!=null?' '+medNo(m)+'번':'')+' '+medT(m):'✗'))});
-  ['m','l','d'].forEach(function(x){if(d.meds[x]&&!borSlots().some(function(sl){return sl[0]===x}))a.push(BSLOT.find(function(b){return b[0]===x})[1]+' ✓ '+(medNo(d.meds[x])!=null?medNo(d.meds[x])+'번 ':'')+medT(d.meds[x]))});
+function medSummary(d){var c=medCfg(),a=[];d.meds=d.meds||{};borSlots().forEach(function(sl){var m=d.meds[sl[0]];a.push(sl[1]+' '+(m?'✓'+(medNo(m)!=null?' '+dNo(medNo(m))+'번':'')+' '+medT(m):'✗'))});
+  ['m','l','d'].forEach(function(x){if(d.meds[x]&&!borSlots().some(function(sl){return sl[0]===x}))a.push(BSLOT.find(function(b){return b[0]===x})[1]+' ✓ '+(medNo(d.meds[x])!=null?dNo(medNo(d.meds[x]))+'번 ':'')+medT(d.meds[x]))});
   if(c.blue||d.meds.b)a.push('파란약 '+(d.meds.b?'✓ '+medT(d.meds.b):'✗'));
   if(d.inj)a.push(injName(d.inj.type||(c.inj&&c.inj.type)||'mounjaro')+' ✓ '+d.inj.dose+'mg · '+d.inj.site);
   if(d.fx&&d.fx.ap)a.push('식욕 '+['낮음','보통','높음'][d.fx.ap-1]);if(d.fx&&d.fx.sx&&d.fx.sx.length)a.push(d.fx.sx.join(', '));return a.join(' · ')}
@@ -386,7 +389,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   /* 주요 4칸 */
   var mealK=MEALS.reduce(function(t,m){return t+d.meals[m[0]].reduce(function(u,x){return u+(+x.kcal||0)},0)},0);
   var mplan=medPlan(d),mcells=[];borSlots().forEach(function(sl){mcells.push([sl[1],d.meds[sl[0]],p.medBase?mplan[sl[0]]:null])});if(medCfg().blue)mcells.push(['파란약',d.meds.b,null]);
-  var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no==='x'?'✗':no!=null?no+'번':'–')+'</span></span>'};
+  var medCell=function(lbl,m,no){var t=medT(m);return '<span class="mc'+(t?' on':'')+'"><span class="ml">'+lbl+'</span><span class="mt num">'+(t?esc(t):no==='x'?'✗':no!=null?dNo(no)+'번':'–')+'</span></span>'};
   var ic=injCfg(),ncell=mcells.length+(ic?1:0);
   var medGrid='<span class="mgrid" style="grid-template-columns:repeat('+Math.max(1,Math.min(3,ncell))+',minmax(0,1fr))">'+mcells.map(function(c){return medCell(c[0],c[1],c[2])}).join('')+(ic?'<span class="mc'+(d.inj?' on':'')+'"><span class="ml">'+injName()+'</span><span class="mt num">'+injShort(d)+'</span></span>':'')+'</span>';
   var medDone=mcells.every(function(c){return medT(c[1])})&&(!ic||!mjDue(d));
@@ -467,7 +470,7 @@ function panel(d,k){var p=S.prof,h='<div class="sec panel">';
     if(!anyMed())h+='<p class="hint" style="margin:0">복용 약이 없습니다. 설정 → 복용 약에서 바꿀 수 있습니다.</p>';
     if(bs.length&&!p.medBase)h+='<p class="hint" style="margin:0;color:var(--sub)">보령: 어제 마지막으로 먹은 봉지 번호를 입력하면 오늘 먹을 번호를 알려 드립니다. 오늘 처음 시작하면 0을 입력하세요.</p><div class="row"><input id="mb" type="number" inputmode="numeric" placeholder="어제 마지막 번호" style="flex:1"><button class="primary" id="mbsave">저장</button></div><p class="err" id="mberr"></p>';
     var btns=bs.map(function(sl){return [sl[0],sl[1]]});if(mc.blue)btns.push(['b','파란약']);
-    if(btns.length){h+=(bs.length?'<div class="hint">보령은 봉지 번호 순서대로</div>':'')+'<div class="row">'+btns.map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+(no==='x'?'건너뜀':no)+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div><p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
+    if(btns.length){h+=(bs.length?'<div class="hint">보령은 봉지 번호 순서대로</div>':'')+'<div class="row">'+btns.map(function(x){var m=d.meds[x[0]],t=medT(m),no=x[0]==='b'?null:medShow(d,x[0]);return '<button class="med'+(t?' on':'')+'" data-med="'+x[0]+'" aria-pressed="'+(!!t)+'">'+(t?'✓ ':'')+x[1]+(no!=null?' <span class="num" style="font-weight:500">('+(no==='x'?'건너뜀':dNo(no))+')</span>':'')+(t?' <span class="num" style="font-size:12px">'+esc(t)+'</span>':'')+'</button>'}).join('')+'</div><p class="hint" style="margin:0">먹은 뒤 누르세요. 다시 누르면 취소됩니다.</p>'}
     if(ic2){h+='<div class="hint" style="margin-top:6px">'+injName()+' · 주 1회 ('+WD[ic2.day]+'요일)</div>';
       if(d.inj)h+='<button class="med on" id="injundo" style="width:100%">'+(S.injUndo?'한 번 더 누르면 기록이 취소됩니다':'✓ '+esc(d.inj.t)+' 주사 완료 · '+d.inj.dose+'mg · '+esc(d.inj.site))+'</button>';
       else{var ns=nextSite(d.date);h+='<div class="grid2"><label class="f">용량<select id="injdose">'+doseOpts(ic2.type,ic2.dose)+'</select></label><label class="f">부위<select id="injsite">'+SITES.map(function(x){return '<option'+(x===ns?' selected':'')+'>'+x+'</option>'}).join('')+'</select></label></div><p class="hint" style="margin:0">다음 주사일: '+label(nextDue(d.date))+' · 부위는 지난번 다음 순서로 미리 골라 둡니다.</p><button class="primary" id="injdo" style="width:100%">주사 완료</button>'}
@@ -554,7 +557,7 @@ function nowHM(){var n=new Date();return pad(n.getHours())+':'+pad(n.getMinutes(
 function alarmStrip(d){var now=nowHM(),list=alarms().filter(function(a){return a.id!=='inj'||mjDue(d)}).sort(function(a,b){return a.time<b.time?-1:1});var due=[],next=null;
   list.forEach(function(a){if(alarmDone(d,a.id))return;if(a.time<=now)due.push(a);else if(!next)next=a});
   var h='';
-  due.forEach(function(a){var act=a.slot?'먹었어요 ('+medNext(d,a.slot)+'번)':a.id==='inj'?'주사 기록':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
+  due.forEach(function(a){var act=a.slot?'먹었어요 ('+dNo(medNext(d,a.slot))+'번)':a.id==='inj'?'주사 기록':a.id==='walk'?'▶ 걷기 시작':a.id==='ex'?'운동 기록하기':'완료';
     if(a.slot&&!S.prof.medBase)act='번호 입력';
     h+='<div class="alarm due"><span class="at num">'+esc(a.time)+'</span><span class="al">'+esc(a.label)+'</span><button class="primary" data-alarm="'+esc(a.id)+'">'+act+'</button><button class="icon ghost" data-askip="'+esc(a.id)+'" aria-label="오늘은 건너뛰기">×</button></div>'});
   if(next)h+='<div class="alarm"><span class="at num">'+esc(next.time)+'</span><span class="al">다음: '+esc(next.label)+'</span></div>';
@@ -694,7 +697,7 @@ function renderSettings(){var p=S.prof;var ib=inbodyFor(today());S.acc=S.acc||{}
   var lb=p.lastBackup;var since=lb?Math.round((parse(today())-parse(lb))/864e5):null;
   h+='<div class="sec"><h2>알림 시간</h2><p class="hint" style="margin:0">이 페이지를 열었을 때 시간이 지났는데 기록이 없으면 맨 위에 알려 줍니다. 페이지가 닫혀 있을 때는 울리지 않으니 휴대폰 시계 앱 알람과 같이 쓰세요.</p>'+
   alarms().map(function(a){return '<div class="ex-row" style="grid-template-columns:110px minmax(0,1fr)"><input type="time" data-alt="'+a.id+'" value="'+esc(a.time)+'" aria-label="'+esc(a.label)+' 시간"><span>'+esc(a.label)+'</span></div>'}).join('')+'</div>';
-  h+='<div class="sec"><h2>복용 약<span class="r">'+esc(medLabel())+'</span></h2>'+medForm('st')+(borSlots().length?'<div class="row"><label class="f" style="flex:1">보령: 기준일 전날까지 마지막 번호<input id="mbn" type="number" inputmode="numeric" value="'+(p.medBase?p.medBase.no:'')+'"></label><label class="f" style="flex:1">기준 날짜<input id="mbd" type="date" value="'+esc(p.medBase?p.medBase.date:today())+'"></label></div><p class="hint" style="margin:0">새로 처방받아 1번부터 다시 먹을 때는 기준 날짜를 첫날로, 번호를 0으로 바꾸세요.</p>':'')+'</div>';
+  h+='<div class="sec"><h2>복용 약<span class="r">'+esc(medLabel())+'</span></h2>'+medForm('st')+(borSlots().length?'<div class="row"><label class="f" style="flex:1">보령: 기준일 전날까지 마지막 번호<input id="mbn" type="number" inputmode="numeric" value="'+(p.medBase?p.medBase.no:'')+'"></label><label class="f" style="flex:1">기준 날짜<input id="mbd" type="date" value="'+esc(p.medBase?p.medBase.date:today())+'"></label></div><label class="f">한 바퀴 봉지 수 (마지막 번호 다음은 1번, 0이면 계속 이어 셈)<input id="mbc" type="number" inputmode="numeric" min="0" value="'+medCycle()+'"></label><p class="hint" style="margin:0">새로 처방받아 1번부터 다시 먹을 때는 기준 날짜를 첫날로, 번호를 0으로 바꾸세요.</p>':'')+'</div>';
   var el=exLib();
   h+='<div class="sec"><h2>근력 운동 목록<span class="r">'+el.length+'개</span></h2><p class="hint" style="margin:0">세트당 kcal은 체중 70kg, 기준 횟수 1세트 기준 추정치입니다. 실제 계산은 그날 체중과 입력한 횟수에 비례해 바뀝니다.</p>'+
   '<div class="ex-row" style="grid-template-columns:70px minmax(0,1fr) 58px 58px 32px;font-size:12px;color:var(--sub)"><span>부위</span><span>운동</span><span>기준</span><span>kcal</span><span></span></div>'+
@@ -731,6 +734,7 @@ function renderSettings(){var p=S.prof;var ib=inbodyFor(today());S.acc=S.acc||{}
   all('[data-alt]',function(i){i.onchange=function(){if(!/^\d{2}:\d{2}$/.test(i.value))return;S.prof.alarmTimes=S.prof.alarmTimes||{};S.prof.alarmTimes[i.dataset.alt]=i.value;touchProf(function(){})}});
   wireMedForm('st',function(){var c=readMedForm('st');S.acc['복용 약']=true;S.keepScroll=true;touchProf(function(p){p.medSetup=c},true)});
   function saveMb(){var v=parseInt(document.getElementById('mbn').value,10),dt=document.getElementById('mbd').value;if(isNaN(v)||v<0||!dt)return;touchProf(function(p){p.medBase={date:dt,no:v}})}
+  bind('mbc','change',function(e){var v=parseInt(e.target.value,10);if(isNaN(v)||v<0)return;S.keepScroll=true;touchProf(function(p){p.medCycle=v},true)});
   bind('mbn','change',saveMb);bind('mbd','change',saveMb);
   function ensureEx(){if(!S.prof.exLib)S.prof.exLib=clone(EXLIB0)}function ensureCf(){if(!S.prof.cofLib)S.prof.cofLib=clone(COF0);S.prof.cofLib.forEach(function(c){if(c.ml==null)c.ml=cofMlOf(c)})}
   all('[data-exf]',function(i){i.onchange=function(){var q=i.dataset.exf.split(':'),f=q[1];ensureEx();var e=S.prof.exLib[+q[0]];var old=e.name;var v=(f==='reps'||f==='kcal')?parseFloat(i.value):i.value.trim();if(f!=='part'&&f!=='name'&&!(v>0))return;if(f==='name'&&!v)return;e[f]=v;if(f==='name'){e.unit=/플랭크|홀드|버티기/.test(v)?'초':'회';(S.prof.lifts||[]).forEach(function(l){if(l.name===old)l.name=v})}touchProf(function(){})}});
