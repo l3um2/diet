@@ -425,7 +425,7 @@ function renderToday(){var d=getDay(S.date);var bal=balance(d);var isToday=S.dat
   bind('w','input',function(e){var v=parseFloat(e.target.value);touchDay(function(d){d.weight=isNaN(v)?null:Math.round(v*10)/10},false)});
   bind('w','change',function(){S.keepScroll=true;render()});
   bind('memo','input',function(e){touchDay(function(d){d.memo=e.target.value},false)});
-  all('[data-open]',function(b){b.onclick=function(){S.openMeal=S.openMeal===b.dataset.open?null:b.dataset.open;S.keepScroll=true;render();var mn=document.getElementById('mn');if(mn&&S.openMeal)mn.focus({preventScroll:true})}});
+  all('[data-open]',function(b){b.onclick=function(){S.openMeal=S.openMeal===b.dataset.open?null:b.dataset.open;S.keepScroll=true;render();}});
   all('[data-del]',function(b){b.onclick=function(){var p=b.dataset.del.split(':');S.keepScroll=true;touchDay(function(d){d.meals[p[0]].splice(+p[1],1)})}});
   all('[data-fav]',function(b){b.onclick=function(){var f=(S.prof.menus||[]).find(function(x){return x.name===b.dataset.fav});if(f)addMeal(f.name,f.kcal,f.prot)}});
   bind('mn','input',function(e){var f=(S.prof.menus||[]).find(function(x){return x.name===e.target.value.trim()});if(f){document.getElementById('mk').value=f.kcal;document.getElementById('mp').value=f.prot!=null?f.prot:''}document.getElementById('merr').textContent=''});
@@ -463,8 +463,8 @@ function panel(d,k){var p=S.prof,h='<div class="sec panel">';
       if(list.length)h+='<div class="chips">'+list.map(function(x,i){return '<span class="chip added">'+esc(x.name)+' <span class="k">'+r0(x.kcal)+(x.prot!=null?' · '+r0(x.prot)+'g':'')+'</span><button class="x" data-del="'+m[0]+':'+i+'" aria-label="'+esc(x.name)+' 삭제">×</button></span>'}).join('')+'</div>';
       if(S.openMeal===m[0]){var fav=(p.menus||[]).slice().sort(function(a,b){var sa=(b.slots&&b.slots[m[0]]||0)*2+(b.count||0),sb=(a.slots&&a.slots[m[0]]||0)*2+(a.count||0);return sa-sb}).slice(0,16);
         h+='<div class="picker">'+(fav.length?'<div class="hint">자주 먹은 메뉴 (누르면 추가)</div><div class="chips">'+fav.map(function(f){return '<button class="chip" data-fav="'+esc(f.name)+'">'+esc(f.name)+' <span class="k">'+r0(f.kcal)+(f.prot!=null?' · '+r0(f.prot)+'g':'')+'</span></button>'}).join('')+'</div>':'<div class="hint">처음 먹은 메뉴를 등록하면 다음부터 여기서 고를 수 있습니다.</div>')+
-        '<input id="mn" placeholder="메뉴 이름 (예: 닭가슴살 샐러드)" list="menu-list"><div class="ex-row" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"><input id="mk" type="number" inputmode="numeric" placeholder="kcal"><input id="mp" type="number" inputmode="decimal" step="0.1" placeholder="단백질 g"><button class="primary" id="madd">추가</button></div>'+
-        '<datalist id="menu-list">'+(p.menus||[]).map(function(f){return '<option value="'+esc(f.name)+'">'}).join('')+'</datalist><p class="err" id="merr"></p></div>'}
+        '<input id="mn" placeholder="새 메뉴 이름 (예: 닭가슴살 샐러드)" autocomplete="off"><div class="ex-row" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto"><input id="mk" type="number" inputmode="numeric" placeholder="kcal"><input id="mp" type="number" inputmode="decimal" step="0.1" placeholder="단백질 g"><button class="primary" id="madd">추가</button></div>'+
+        '<p class="err" id="merr"></p></div>'}
       h+='</div>'})}
   else if(k==='med'){var mc=medCfg(),bs=borSlots(),ic2=injCfg();h+='<h2>약 복용<span class="r">'+esc(medLabel())+'</span></h2>';
     if(!anyMed())h+='<p class="hint" style="margin:0">복용 약이 없습니다. 설정 → 복용 약에서 바꿀 수 있습니다.</p>';
